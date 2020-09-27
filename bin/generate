@@ -6,7 +6,7 @@ import re
 
 
 def compile(service, version, variable, alias, image, scheme, ports, sponsors, unimplemented, dokku_version):
-    prefix ="\n\n".join([
+    prefix = "\n\n".join([
         header(service),
         description(service, image, version),
     ])
@@ -45,7 +45,7 @@ def description(service, full_image, version):
     base = "_"
     image = full_image
     if "/" in full_image:
-        base = full_image.split("/")[0]
+        base = "r/" + full_image.split("/")[0]
         image = full_image.split("/")[1]
 
     return f"Official {service} plugin for dokku. Currently defaults to installing [{full_image} {version}](https://hub.docker.com/{base}/{image}/)."
