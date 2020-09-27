@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/config"
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common-functions"
+source "$PLUGIN_BASE_PATH/common/functions"
+source "$PLUGIN_AVAILABLE_PATH/config/functions"
+if [[ -f "$PLUGIN_AVAILABLE_PATH/docker-options/functions" ]]; then
+  source "$PLUGIN_AVAILABLE_PATH/docker-options/functions"
+fi
+
+service_connect() {
+  local SERVICE="$1"
+  local SERVICE_ROOT="$PLUGIN_DATA_ROOT/$SERVICE"
+  local SERVICE_NAME="$(get_service_name "$SERVICE")"
+  local PASSWORD="$(service_password "$SERVICE")"
+  local SERVICE_TTY_OPTS
+  has_tty && SERVICE_TTY_OPTS="-t"
+
+  docker exec -i $SERVICE_TTY_OPTS "$SERVICE_NAME" clickhouse client
+}
+
+service_create() {
+  local SERVICE="$1"
+  is_valid_service_name "$SERVICE" || dokku_log_fail "Please specify a valid name for the service. Valid characters are: [A-Za-z0-9_]+"
+  [[ -z "$SERVICE" ]] && dokku_log_fail "Please specify a valid name for the service"
+  [[ ! -d "$PLUGIN_DATA_ROOT/$SERVICE" ]] || dokku_log_fail "$PLUGIN_SERVICE service $SERVICE already exists"
+  SERVICE_ROOT="$PLUGIN_DATA_ROOT/$SERVICE"
+  LINKS_FILE="$SERVICE_ROOT/LINKS"
+
+  service_parse_args "${@:2}"
+
+  if ! service_image_exists "$SERVICE"; then
+    if [[ "$PLUGIN_DISABLE_PULL" == "true" ]]; then
+      dokku_log_warn "${PLUGIN_DISABLE_PULL_VARIABLE} environment variable detected. Not running pull command." 1>&2
+      dokku_log_warn "   docker pull ${IMAGE}" 1>&2
+      dokku_log_warn "$PLUGIN_SERVICE service creation failed"
+      exit 1
+    fi
+    docker pull "$PLUGIN_IMAGE:$PLUGIN_IMAGE_VERSION" || dokku_log_fail "$PLUGIN_SERVICE image $PLUGIN_IMAGE:$PLUGIN_IMAGE_VERSION pull failed"
+  fi
+
+  mkdir -p "$SERVICE_ROOT" || dokku_log_fail "Unable to create service directory"
+  mkdir -p "$SERVICE_ROOT/data" || dokku_log_fail "Unable to create service data directory"
+  mkdir -p "$SERVICE_ROOT/config" || dokku_log_fail "Unable to create service config directory"
+  touch "$LINKS_FILE"
+
+  PASSWORD=$(openssl rand -hex 8)
+  if [[ -n "$SERVICE_PASSWORD" ]]; then
+    PASSWORD="$SERVICE_PASSWORD"
+    dokku_log_warn "Specified password may not be as secure as the auto-generated password"
+  fi
+
+  echo "$PASSWORD" >"$SERVICE_ROOT/PASSWORD"
+  chmod 640 "$SERVICE_ROOT/PASSWORD"
+
+  [[ -n "$SERVICE_CUSTOM_ENV" ]] && CLICKHOUSE_CUSTOM_ENV="$SERVICE_CUSTOM_ENV"
+  if [[ -n $CLICKHOUSE_CUSTOM_ENV ]]; then
+    echo "$CLICKHOUSE_CUSTOM_ENV" | tr ';' "\n" >"$SERVICE_ROOT/ENV"
+  else
+    echo "" >"$SERVICE_ROOT/ENV"
+  fi
+
+  write_database_name "$SERVICE"
+  service_create_container "$SERVICE"
+}
+
+service_create_container() {
+  local SERVICE="$1"
+  local SERVICE_ROOT="$PLUGIN_DATA_ROOT/$SERVICE"
+  local SERVICE_HOST_ROOT="$PLUGIN_DATA_HOST_ROOT/$SERVICE"
+  local SERVICE_NAME="$(get_service_name "$SERVICE")"
+  local PASSWORD="$(service_password "$SERVICE")"
+  local DATABASE_NAME="$(get_database_name "$SERVICE")"
+
+  ID=$(docker run --name "$SERVICE_NAME" -v "$SERVICE_HOST_ROOT/data:/var/lib/clickhouse" --env-file="$SERVICE_ROOT/ENV" -d --restart always --label dokku=service --label dokku.service=clickhouse "$PLUGIN_IMAGE:$PLUGIN_IMAGE_VERSION")
+  echo "$ID" >"$SERVICE_ROOT/ID"
+
+  dokku_log_verbose_quiet "Waiting for container to be ready"
+  docker run --rm --link "$SERVICE_NAME:$PLUGIN_COMMAND_PREFIX" "$PLUGIN_WAIT_IMAGE" -p "$PLUGIN_DATASTORE_WAIT_PORT" >/dev/null
+
+  dokku_log_verbose_quiet "Creating container user"
+  echo "CREATE USER IF NOT EXISTS $SERVICE IDENTIFIED WITH sha256_password by '$PASSWORD';" | docker exec -i $SERVICE_TTY_OPTS "$SERVICE_NAME" clickhouse client >/dev/null
+  echo "GRANT ALL ON *.* TO $SERVICE WITH GRANT OPTION;" | docker exec -i $SERVICE_TTY_OPTS "$SERVICE_NAME" clickhouse client >/dev/null
+  echo "CREATE DATABASE $DATABASE_NAME;" | docker exec -i $SERVICE_TTY_OPTS "$SERVICE_NAME" clickhouse client >/dev/null
+  echo "CREATE TABLE $DATABASE_NAME.$DATABASE_NAME (x Int32) ENGINE = Log;" | docker exec -i $SERVICE_TTY_OPTS "$SERVICE_NAME" clickhouse client >/dev/null
+
+  dokku_log_info2 "$PLUGIN_SERVICE container created: $SERVICE"
+  service_info "$SERVICE"
+}
+
+service_export() {
+  local SERVICE="$1"
+  local SERVICE_ROOT="$PLUGIN_DATA_ROOT/$SERVICE"
+
+  dokku_log_fail "Not yet implemented"
+}
+
+service_import() {
+  local SERVICE="$1"
+  local SERVICE_ROOT="$PLUGIN_DATA_ROOT/$SERVICE"
+  local SERVICE_HOST_ROOT="$PLUGIN_DATA_HOST_ROOT/$SERVICE"
+  local SERVICE_NAME="$(get_service_name "$SERVICE")"
+
+  dokku_log_fail "Not yet implemented"
+}
+
+service_start() {
+  local SERVICE="$1"
+  local QUIET="$2"
+  local SERVICE_ROOT="$PLUGIN_DATA_ROOT/$SERVICE"
+  local SERVICE_NAME="$(get_service_name "$SERVICE")"
+  local ID=$(docker ps -aq --no-trunc --filter "status=running" --filter "name=^/$SERVICE_NAME$" --format '{{ .ID }}') || true
+  if [[ -n $ID ]]; then
+    [[ -z $QUIET ]] && dokku_log_warn "Service is already started"
+    if [[ ! -f "$SERVICE_ROOT/ID" ]] || [[ "$(cat "$SERVICE_ROOT/ID")" != "$ID" ]]; then
+      [[ -z $QUIET ]] && dokku_log_warn "Updating local container ID"
+      echo "$ID" >"$SERVICE_ROOT/ID"
+    fi
+    return 0
+  fi
+
+  dokku_log_info2_quiet "Starting container"
+  local PREVIOUS_ID=$(docker ps -aq --no-trunc --filter "status=exited" --filter "name=^/$SERVICE_NAME$" --format '{{ .ID }}') || true
+  local ROOTPASSWORD="$(service_root_password "$SERVICE")"
+  local PASSWORD="$(service_password "$SERVICE")"
+
+  if [[ -n $PREVIOUS_ID ]]; then
+    docker start "$PREVIOUS_ID" >/dev/null
+    service_port_unpause "$SERVICE"
+    dokku_log_info2 "Container started"
+  elif service_image_exists "$SERVICE" && [[ -n "$ROOTPASSWORD" ]] && [[ -n "$PASSWORD" ]]; then
+    service_create_container "$SERVICE"
+  else
+    dokku_log_verbose_quiet "Neither container nor valid configuration exists for $SERVICE"
+  fi
+}
+
+service_url() {
+  local SERVICE="$1"
+  local SERVICE_DNS_HOSTNAME="$(service_dns_hostname "$SERVICE")"
+  local DATABASE_NAME="$(get_database_name "$SERVICE")"
+  local PASSWORD="$(service_password "$SERVICE")"
+  echo "$PLUGIN_SCHEME://$SERVICE:$PASSWORD@$SERVICE_DNS_HOSTNAME:${PLUGIN_DATASTORE_PORTS[0]}/$DATABASE_NAME"
+}
