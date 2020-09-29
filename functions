@@ -17,7 +17,7 @@ service_connect() {
   local SERVICE_TTY_OPTS
   has_tty && SERVICE_TTY_OPTS="-t"
 
-  docker exec -i $SERVICE_TTY_OPTS "$SERVICE_NAME" clickhouse client
+  docker exec -i $SERVICE_TTY_OPTS "$SERVICE_NAME" clickhouse client --user="$SERVICE" --password="$PASSWORD"
 }
 
 service_create() {
