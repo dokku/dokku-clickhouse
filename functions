@@ -73,7 +73,7 @@ service_create_container() {
   local PASSWORD="$(service_password "$SERVICE")"
   local DATABASE_NAME="$(get_database_name "$SERVICE")"
 
-  ID=$(docker run --name "$SERVICE_NAME" -v "$SERVICE_HOST_ROOT/data:/var/lib/clickhouse" -e "CLICKHOUSE_USER=$SERVICE" -e "CLICKHOUSE_PASSWORD=$PASSWORD" -e "CLICKHOUSE_DB=$SERVICE" --env-file="$SERVICE_ROOT/ENV" -d --restart always --label dokku=service --label dokku.service=clickhouse "$PLUGIN_IMAGE:$PLUGIN_IMAGE_VERSION")
+  ID=$(docker run --name "$SERVICE_NAME" -v "$SERVICE_HOST_ROOT/data:/var/lib/clickhouse" -e "CLICKHOUSE_USER=$SERVICE" -e "CLICKHOUSE_PASSWORD=$PASSWORD" -e "CLICKHOUSE_DB=$DATABASE_NAME" --env-file="$SERVICE_ROOT/ENV" -d --restart always --label dokku=service --label dokku.service=clickhouse "$PLUGIN_IMAGE:$PLUGIN_IMAGE_VERSION")
   echo "$ID" >"$SERVICE_ROOT/ID"
 
   dokku_log_verbose_quiet "Waiting for container to be ready"
