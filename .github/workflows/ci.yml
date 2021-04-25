@@ -65,6 +65,8 @@ jobs:
       - run: sudo sysctl -w vm.max_map_count=262144
 
       - run: |
+          set -x
+          git --no-pager diff --name-only FETCH_HEAD $(git merge-base FETCH_HEAD master)
           make generate
           if ! git diff --quiet README.md; then
             echo "Please run `make generate`"
