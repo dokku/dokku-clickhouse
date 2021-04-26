@@ -70,7 +70,7 @@ jobs:
       - run: |
           set -x
           git fetch origin master
-          changed=$(git --no-pager diff --name-only $GITHUB_SHA..master)
+          changed=$(git --no-pager diff --name-only $GITHUB_SHA..origin/master)
           if [ $changed != "Dockerfile" ]; then
             make generate
             if ! git diff --quiet README.md; then
