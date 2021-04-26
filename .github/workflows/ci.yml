@@ -70,13 +70,15 @@ jobs:
       - run: |
           set -x
           git fetch origin master
-          git --no-pager diff --name-only FETCH_HEAD $(git merge-base FETCH_HEAD master)
-          make generate
-          if ! git diff --quiet README.md; then
-            echo "Please run `make generate`"
-            git status --short
-            git --no-pager diff README.md
-            exit 1
+          changed=$(git --no-pager diff --name-only $GITHUB_SHA..master)
+          if [ $changed != "Dockerfile" ]; then
+            make generate
+            if ! git diff --quiet README.md; then
+              echo "Please run `make generate`"
+              git status --short
+              git --no-pager diff README.md
+              exit 1
+            fi
           fi
 
       - run: make test
