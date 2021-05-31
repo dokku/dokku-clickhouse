@@ -1,6 +1,6 @@
 # dokku clickhouse [![Build Status](https://img.shields.io/circleci/project/github/dokku/dokku-clickhouse.svg?branch=master&style=flat-square "Build Status")](https://circleci.com/gh/dokku/dokku-clickhouse/tree/master) [![IRC Network](https://img.shields.io/badge/irc-freenode-blue.svg?style=flat-square "IRC Freenode")](https://webchat.freenode.net/?channels=dokku)
 
-Official clickhouse plugin for dokku. Currently defaults to installing [yandex/clickhouse-server 20.9.2.20](https://hub.docker.com/r/yandex/clickhouse-server/).
+Official clickhouse plugin for dokku. Currently defaults to installing [yandex/clickhouse-server 21.5.5.12](https://hub.docker.com/r/yandex/clickhouse-server/).
 
 ## Sponsors
 
