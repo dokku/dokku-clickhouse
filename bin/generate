@@ -326,6 +326,7 @@ def command_data(command, service, variable, alias, image, scheme, ports):
             line = line.replace("${PLUGIN_IMAGE}", image)
             line = line.replace("${PLUGIN_SCHEME}", scheme)
             line = line.replace("${PLUGIN_DATASTORE_PORTS[0]}", ports[0])
+            line = line.replace("${PLUGIN_DATASTORE_PORTS[1]}", ports[1])
             line = line.replace("${PLUGIN_DATASTORE_PORTS[@]}", " ".join(ports))
 
             if "declare desc" in line:
