@@ -220,6 +220,12 @@ This will cause `CLICKHOUSE_URL` to be set as:
 clickhouse2://lolipop:SOME_PASSWORD@dokku-clickhouse-lolipop:9000/lolipop
 ```
 
+If you specify `CLICKHOUSE_DATABASE_SCHEME` to equal `http`, we'll also automatically adjust the URL to match the HTTP interface, e.g.
+
+```
+http://lolipop:SOME_PASSWORD@dokku-clickhouse-lolipop:8123
+```
+
 ### unlink the clickhouse service from the app
 
 ```shell
