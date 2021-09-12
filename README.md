@@ -29,7 +29,7 @@ clickhouse:create <service> [--create-flags...]   # create a clickhouse service
 clickhouse:destroy <service> [-f|--force]         # delete the clickhouse service/data/container if there are no links left
 clickhouse:enter <service>                        # enter or run a command in a running clickhouse service container
 clickhouse:exists <service>                       # check if the clickhouse service exists
-clickhouse:expose <service> <ports...>            # expose a clickhouse service on custom port if provided (random port otherwise)
+clickhouse:expose <service> <ports...>            # expose a clickhouse service on custom host:port if provided (random port on the 0.0.0.0 interface if otherwise unspecified)
 clickhouse:info <service> [--single-info-flag]    # print the service information
 clickhouse:link <service> <app> [--link-flags...] # link the clickhouse service to the app
 clickhouse:linked <service> <app>                 # check if the clickhouse service is linked to an app
@@ -277,7 +277,7 @@ You may also run a command directly against the service. Filesystem changes will
 dokku clickhouse:enter lolipop touch /tmp/test
 ```
 
-### expose a clickhouse service on custom port if provided (random port otherwise)
+### expose a clickhouse service on custom host:port if provided (random port on the 0.0.0.0 interface if otherwise unspecified)
 
 ```shell
 # usage
@@ -288,6 +288,12 @@ Expose the service on the service's normal ports, allowing access to it from the
 
 ```shell
 dokku clickhouse:expose lolipop 9000 8123
+```
+
+Expose the service on the service's normal ports, with the first on a specified ip adddress (127.0.0.1):
+
+```shell
+dokku clickhouse:expose lolipop 127.0.0.1:9000 8123
 ```
 
 ### unexpose a previously exposed clickhouse service
