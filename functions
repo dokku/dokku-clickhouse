@@ -119,14 +119,13 @@ service_start() {
 
   dokku_log_info2_quiet "Starting container"
   local PREVIOUS_ID=$(docker ps -aq --no-trunc --filter "status=exited" --filter "name=^/$SERVICE_NAME$" --format '{{ .ID }}') || true
-  local ROOTPASSWORD="$(service_root_password "$SERVICE")"
   local PASSWORD="$(service_password "$SERVICE")"
 
   if [[ -n $PREVIOUS_ID ]]; then
     docker start "$PREVIOUS_ID" >/dev/null
     service_port_unpause "$SERVICE"
     dokku_log_info2 "Container started"
-  elif service_image_exists "$SERVICE" && [[ -n "$ROOTPASSWORD" ]] && [[ -n "$PASSWORD" ]]; then
+  elif service_image_exists "$SERVICE" && [[ -n "$PASSWORD" ]]; then
     service_create_container "$SERVICE"
   else
     if ! service_image_exists "$SERVICE"; then
