@@ -82,7 +82,7 @@ service_create_container() {
   local PASSWORD="$(service_password "$SERVICE")"
   local DATABASE_NAME="$(get_database_name "$SERVICE")"
 
-  ID=$(docker run --name "$SERVICE_NAME" -v "$SERVICE_HOST_ROOT/data:/var/lib/clickhouse" -v "$SERVICE_HOST_ROOT/$PLUGIN_CONFIG_SUFFIX/config.xml:/etc/clickhouse-server/config.xml" -v "$SERVICE_HOST_ROOT/$PLUGIN_CONFIG_SUFFIX/users.xml:/etc/clickhouse-server/users.xml" -v "$SERVICE_HOST_ROOT/$PLUGIN_CONFIG_SUFFIX/config.d/:/etc/clickhouse-server/config.d/" -v "$SERVICE_HOST_ROOT/$PLUGIN_CONFIG_SUFFIX/users.d/:/etc/clickhouse-server/users.d/" -e "CLICKHOUSE_USER=$SERVICE" -e "CLICKHOUSE_PASSWORD=$PASSWORD" -e "CLICKHOUSE_DB=$DATABASE_NAME" --env-file="$SERVICE_ROOT/ENV" -d --restart always --label dokku=service --label dokku.service=clickhouse "$PLUGIN_IMAGE:$PLUGIN_IMAGE_VERSION")
+  ID=$(docker run --name "$SERVICE_NAME" -v "$SERVICE_HOST_ROOT/data:/var/lib/clickhouse" -v "$SERVICE_HOST_ROOT/$PLUGIN_CONFIG_SUFFIX:/etc/clickhouse-server/" -e "CLICKHOUSE_USER=$SERVICE" -e "CLICKHOUSE_PASSWORD=$PASSWORD" -e "CLICKHOUSE_DB=$DATABASE_NAME" --env-file="$SERVICE_ROOT/ENV" -d --restart always --label dokku=service --label dokku.service=clickhouse "$PLUGIN_IMAGE:$PLUGIN_IMAGE_VERSION")
   echo "$ID" >"$SERVICE_ROOT/ID"
 
   dokku_log_verbose_quiet "Waiting for container to be ready"
