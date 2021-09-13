@@ -60,6 +60,7 @@ dokku clickhouse:create <service> [--create-flags...]
 
 flags:
 
+- `-c|--config-options "--args --go=here"`: extra arguments to pass to the container create command (default: `None`)
 - `-C|--custom-env "USER=alpha;HOST=beta"`: semi-colon delimited environment variables to start the service with
 - `-i|--image IMAGE`: the image name to start the service with
 - `-I|--image-version IMAGE_VERSION`: the image version to start the service with
@@ -387,6 +388,7 @@ dokku clickhouse:upgrade <service> [--upgrade-flags...]
 
 flags:
 
+- `-c|--config-options "--args --go=here"`: extra arguments to pass to the container create command (default: `None`)
 - `-C|--custom-env "USER=alpha;HOST=beta"`: semi-colon delimited environment variables to start the service with
 - `-i|--image IMAGE`: the image name to start the service with
 - `-I|--image-version IMAGE_VERSION`: the image version to start the service with
