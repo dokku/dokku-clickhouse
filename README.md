@@ -257,6 +257,8 @@ dokku clickhouse:connect <service>
 
 Connect to the service via the clickhouse connection tool:
 
+> NOTE: disconnecting from ssh while running this command may leave zombie processes due to moby/moby#9098
+
 ```shell
 dokku clickhouse:connect lollipop
 ```
@@ -269,6 +271,8 @@ dokku clickhouse:enter <service>
 ```
 
 A bash prompt can be opened against a running service. Filesystem changes will not be saved to disk.
+
+> NOTE: disconnecting from ssh while running this command may leave zombie processes due to moby/moby#9098
 
 ```shell
 dokku clickhouse:enter lollipop
