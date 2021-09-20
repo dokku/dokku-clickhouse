@@ -44,7 +44,13 @@ service_create() {
   mkdir -p "$SERVICE_ROOT" || dokku_log_fail "Unable to create service directory"
   mkdir -p "$SERVICE_ROOT/data" || dokku_log_fail "Unable to create service data directory"
   mkdir -p "$SERVICE_ROOT/$PLUGIN_CONFIG_SUFFIX" || dokku_log_fail "Unable to create service config directory"
+  mkdir -p "$SERVICE_ROOT/$PLUGIN_CONFIG_SUFFIX/config.d/" || dokku_log_fail "Unable to create config.d directory"
+  mkdir -p "$SERVICE_ROOT/$PLUGIN_CONFIG_SUFFIX/users.d/" || dokku_log_fail "Unable to create users.d directory"
   touch "$LINKS_FILE"
+
+  curl -sSL "https://raw.githubusercontent.com/ClickHouse/ClickHouse/v${PLUGIN_IMAGE_VERSION}-stable/programs/server/config.xml" > "$SERVICE_ROOT/$PLUGIN_CONFIG_SUFFIX/config.xml" || dokku_log_fail "Unable to download the default config.xml to the config directory"
+  curl -sSL "https://raw.githubusercontent.com/ClickHouse/ClickHouse/v${PLUGIN_IMAGE_VERSION}-stable/docker/server/docker_related_config.xml" > "$SERVICE_ROOT/$PLUGIN_CONFIG_SUFFIX/config.d/docker_related_config.xml" || dokku_log_fail "Unable to download the extra docker config (docker_related_config.xml) to the config directory"
+  curl -sSL "https://raw.githubusercontent.com/ClickHouse/ClickHouse/v${PLUGIN_IMAGE_VERSION}-stable/programs/server/users.xml" > "$SERVICE_ROOT/$PLUGIN_CONFIG_SUFFIX/users.xml" || dokku_log_fail "Unable to download the default users.xml to the config directory"
 
   PASSWORD=$(openssl rand -hex 8)
   if [[ -n "$SERVICE_PASSWORD" ]]; then
@@ -88,7 +94,7 @@ service_create_container() {
   [[ -f "$SERVICE_ROOT/IMAGE_VERSION" ]] && PLUGIN_IMAGE_VERSION="$(cat "$SERVICE_ROOT/IMAGE_VERSION")"
 
   # shellcheck disable=SC2086
-  ID=$(docker run --name "$SERVICE_NAME" $MEMORY_LIMIT $SHM_SIZE -v "$SERVICE_HOST_ROOT/data:/var/lib/clickhouse" -e "CLICKHOUSE_USER=$SERVICE" -e "CLICKHOUSE_PASSWORD=$PASSWORD" -e "CLICKHOUSE_DB=$DATABASE_NAME" --env-file="$SERVICE_ROOT/ENV" -d --restart always --label dokku=service --label dokku.service=clickhouse "$PLUGIN_IMAGE:$PLUGIN_IMAGE_VERSION" $CONFIG_OPTIONS)
+  ID=$(docker run --name "$SERVICE_NAME" $MEMORY_LIMIT $SHM_SIZE -v "$SERVICE_HOST_ROOT/data:/var/lib/clickhouse" -v "$SERVICE_HOST_ROOT/$PLUGIN_CONFIG_SUFFIX:/etc/clickhouse-server/" -e "CLICKHOUSE_USER=$SERVICE" -e "CLICKHOUSE_PASSWORD=$PASSWORD" -e "CLICKHOUSE_DB=$DATABASE_NAME" --env-file="$SERVICE_ROOT/ENV" -d --restart always --label dokku=service --label dokku.service=clickhouse "$PLUGIN_IMAGE:$PLUGIN_IMAGE_VERSION" $CONFIG_OPTIONS)
   echo "$ID" >"$SERVICE_ROOT/ID"
 
   dokku_log_verbose_quiet "Waiting for container to be ready"
