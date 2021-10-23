@@ -1,5 +1,5 @@
 [plugin]
 description = "dokku clickhouse service plugin"
-version = "0.9.0"
+version = "0.10.0"
 sponsors = ["coding-socks"]
 [plugin.config]
