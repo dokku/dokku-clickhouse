@@ -23,26 +23,26 @@ sudo dokku plugin:install https://github.com/dokku/dokku-clickhouse.git clickhou
 ## Commands
 
 ```
-clickhouse:app-links <app>                        # list all clickhouse service links for a given app
-clickhouse:connect <service>                      # connect to the service via the clickhouse connection tool
-clickhouse:create <service> [--create-flags...]   # create a clickhouse service
-clickhouse:destroy <service> [-f|--force]         # delete the clickhouse service/data/container if there are no links left
-clickhouse:enter <service>                        # enter or run a command in a running clickhouse service container
-clickhouse:exists <service>                       # check if the clickhouse service exists
-clickhouse:expose <service> <ports...>            # expose a clickhouse service on custom host:port if provided (random port on the 0.0.0.0 interface if otherwise unspecified)
-clickhouse:info <service> [--single-info-flag]    # print the service information
-clickhouse:link <service> <app> [--link-flags...] # link the clickhouse service to the app
-clickhouse:linked <service> <app>                 # check if the clickhouse service is linked to an app
-clickhouse:links <service>                        # list all apps linked to the clickhouse service
-clickhouse:list                                   # list all clickhouse services
-clickhouse:logs <service> [-t|--tail]             # print the most recent log(s) for this service
-clickhouse:promote <service> <app>                # promote service <service> as CLICKHOUSE_URL in <app>
-clickhouse:restart <service>                      # graceful shutdown and restart of the clickhouse service container
-clickhouse:start <service>                        # start a previously stopped clickhouse service
-clickhouse:stop <service>                         # stop a running clickhouse service
-clickhouse:unexpose <service>                     # unexpose a previously exposed clickhouse service
-clickhouse:unlink <service> <app>                 # unlink the clickhouse service from the app
-clickhouse:upgrade <service> [--upgrade-flags...] # upgrade service <service> to the specified versions
+clickhouse:app-links <app>                         # list all clickhouse service links for a given app
+clickhouse:connect <service>                       # connect to the service via the clickhouse connection tool
+clickhouse:create <service> [--create-flags...]    # create a clickhouse service
+clickhouse:destroy <service> [-f|--force]          # delete the clickhouse service/data/container if there are no links left
+clickhouse:enter <service>                         # enter or run a command in a running clickhouse service container
+clickhouse:exists <service>                        # check if the clickhouse service exists
+clickhouse:expose <service> <ports...>             # expose a clickhouse service on custom host:port if provided (random port on the 0.0.0.0 interface if otherwise unspecified)
+clickhouse:info <service> [--single-info-flag]     # print the service information
+clickhouse:link <service> <app> [--link-flags...]  # link the clickhouse service to the app
+clickhouse:linked <service> <app>                  # check if the clickhouse service is linked to an app
+clickhouse:links <service>                         # list all apps linked to the clickhouse service
+clickhouse:list                                    # list all clickhouse services
+clickhouse:logs <service> [-t|--tail] <tail-num-optional> # print the most recent log(s) for this service
+clickhouse:promote <service> <app>                 # promote service <service> as CLICKHOUSE_URL in <app>
+clickhouse:restart <service>                       # graceful shutdown and restart of the clickhouse service container
+clickhouse:start <service>                         # start a previously stopped clickhouse service
+clickhouse:stop <service>                          # stop a running clickhouse service
+clickhouse:unexpose <service>                      # unexpose a previously exposed clickhouse service
+clickhouse:unlink <service> <app>                  # unlink the clickhouse service from the app
+clickhouse:upgrade <service> [--upgrade-flags...]  # upgrade service <service> to the specified versions
 ```
 
 ## Usage
@@ -148,12 +148,12 @@ dokku clickhouse:list
 
 ```shell
 # usage
-dokku clickhouse:logs <service> [-t|--tail]
+dokku clickhouse:logs <service> [-t|--tail] <tail-num-optional>
 ```
 
 flags:
 
-- `-t|--tail`: do not stop when end of the logs are reached and wait for additional output
+- `-t|--tail [<tail-num>]`: do not stop when end of the logs are reached and wait for additional output
 
 You can tail logs for a particular service:
 
@@ -165,6 +165,12 @@ By default, logs will not be tailed, but you can do this with the --tail flag:
 
 ```shell
 dokku clickhouse:logs lollipop --tail
+```
+
+The default tail setting is to show all logs, but an initial count can also be specified:
+
+```shell
+dokku clickhouse:logs lollipop --tail 5
 ```
 
 ### link the clickhouse service to the app
