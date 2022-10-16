@@ -52,6 +52,8 @@ service_create() {
   curl -sSL "https://raw.githubusercontent.com/ClickHouse/ClickHouse/v${PLUGIN_IMAGE_VERSION}-stable/docker/server/docker_related_config.xml" >"$SERVICE_ROOT/$PLUGIN_CONFIG_SUFFIX/config.d/docker_related_config.xml" || dokku_log_fail "Unable to download the extra docker config (docker_related_config.xml) to the config directory"
   curl -sSL "https://raw.githubusercontent.com/ClickHouse/ClickHouse/v${PLUGIN_IMAGE_VERSION}-stable/programs/server/users.xml" >"$SERVICE_ROOT/$PLUGIN_CONFIG_SUFFIX/users.xml" || dokku_log_fail "Unable to download the default users.xml to the config directory"
 
+  cp "/var/lib/dokku/plugins/available/$PLUGIN_COMMAND_PREFIX/system_log_ttl_config.xml" "$SERVICE_ROOT/$PLUGIN_CONFIG_SUFFIX/config.d/system_log_ttl_config.xml" || dokku_log_fail "Unable to copy the default system log TTL config (system_log_ttl_config.xml) to the config directory"
+
   PASSWORD=$(openssl rand -hex 8)
   if [[ -n "$SERVICE_PASSWORD" ]]; then
     PASSWORD="$SERVICE_PASSWORD"
