@@ -36,6 +36,7 @@ clickhouse:linked <service> <app>                  # check if the clickhouse ser
 clickhouse:links <service>                         # list all apps linked to the clickhouse service
 clickhouse:list                                    # list all clickhouse services
 clickhouse:logs <service> [-t|--tail] <tail-num-optional> # print the most recent log(s) for this service
+clickhouse:pause <service>                         # pause a running clickhouse service
 clickhouse:promote <service> <app>                 # promote service <service> as CLICKHOUSE_URL in <app>
 clickhouse:restart <service>                       # graceful shutdown and restart of the clickhouse service container
 clickhouse:start <service>                         # start a previously stopped clickhouse service
@@ -371,10 +372,23 @@ dokku clickhouse:start lollipop
 dokku clickhouse:stop <service>
 ```
 
-Stop the service and the running container:
+Stop the service and removes the running container:
 
 ```shell
 dokku clickhouse:stop lollipop
+```
+
+### pause a running clickhouse service
+
+```shell
+# usage
+dokku clickhouse:pause <service>
+```
+
+Pause the running container for the service:
+
+```shell
+dokku clickhouse:pause lollipop
 ```
 
 ### graceful shutdown and restart of the clickhouse service container
