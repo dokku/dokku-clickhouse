@@ -39,6 +39,7 @@ clickhouse:logs <service> [-t|--tail] <tail-num-optional> # print the most recen
 clickhouse:pause <service>                         # pause a running clickhouse service
 clickhouse:promote <service> <app>                 # promote service <service> as CLICKHOUSE_URL in <app>
 clickhouse:restart <service>                       # graceful shutdown and restart of the clickhouse service container
+clickhouse:set <service> <key> <value>             # set or clear a property for a service
 clickhouse:start <service>                         # start a previously stopped clickhouse service
 clickhouse:stop <service>                          # stop a running clickhouse service
 clickhouse:unexpose <service>                      # unexpose a previously exposed clickhouse service
@@ -249,6 +250,25 @@ You can unlink a clickhouse service:
 
 ```shell
 dokku clickhouse:unlink lollipop playground
+```
+
+### set or clear a property for a service
+
+```shell
+# usage
+dokku clickhouse:set <service> <key> <value>
+```
+
+Set the network to attach after the service container is started:
+
+```shell
+dokku clickhouse:set lollipop post-create-network custom-network
+```
+
+Unset the post-create-network value:
+
+```shell
+dokku clickhouse:set lollipop post-create-network
 ```
 
 ### Service Lifecycle
