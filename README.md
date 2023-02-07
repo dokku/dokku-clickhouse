@@ -482,8 +482,8 @@ List all apps linked to the `lollipop` clickhouse service.
 dokku clickhouse:links lollipop
 ```
 
-### Disabling `docker pull` calls
+### Disabling `docker image pull` calls
 
-If you wish to disable the `docker pull` calls that the plugin triggers, you may set the `CLICKHOUSE_DISABLE_PULL` environment variable to `true`. Once disabled, you will need to pull the service image you wish to deploy as shown in the `stderr` output.
+If you wish to disable the `docker image pull` calls that the plugin triggers, you may set the `CLICKHOUSE_DISABLE_PULL` environment variable to `true`. Once disabled, you will need to pull the service image you wish to deploy as shown in the `stderr` output.
 
-Please ensure the proper images are in place when `docker pull` is disabled.
+Please ensure the proper images are in place when `docker image pull` is disabled.
