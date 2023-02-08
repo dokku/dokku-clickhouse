@@ -39,6 +39,7 @@ clickhouse:logs <service> [-t|--tail] <tail-num-optional> # print the most recen
 clickhouse:pause <service>                         # pause a running clickhouse service
 clickhouse:promote <service> <app>                 # promote service <service> as CLICKHOUSE_URL in <app>
 clickhouse:restart <service>                       # graceful shutdown and restart of the clickhouse service container
+clickhouse:set <service> <key> <value>             # set or clear a property for a service
 clickhouse:start <service>                         # start a previously stopped clickhouse service
 clickhouse:stop <service>                          # stop a running clickhouse service
 clickhouse:unexpose <service>                      # unexpose a previously exposed clickhouse service
@@ -106,7 +107,10 @@ flags:
 - `--exposed-ports`: show service exposed ports
 - `--id`: show the service container id
 - `--internal-ip`: show the service internal ip
+- `--initial-network`: show the initial network being connected to
 - `--links`: show the service app links
+- `--post-create-network`: show the networks to attach to after service container creation
+- `--post-start-network`: show the networks to attach to after service container start
 - `--service-root`: show the service root directory
 - `--status`: show the service running status
 - `--version`: show the service image version
@@ -126,7 +130,10 @@ dokku clickhouse:info lollipop --dsn
 dokku clickhouse:info lollipop --exposed-ports
 dokku clickhouse:info lollipop --id
 dokku clickhouse:info lollipop --internal-ip
+dokku clickhouse:info lollipop --initial-network
 dokku clickhouse:info lollipop --links
+dokku clickhouse:info lollipop --post-create-network
+dokku clickhouse:info lollipop --post-start-network
 dokku clickhouse:info lollipop --service-root
 dokku clickhouse:info lollipop --status
 dokku clickhouse:info lollipop --version
@@ -249,6 +256,31 @@ You can unlink a clickhouse service:
 
 ```shell
 dokku clickhouse:unlink lollipop playground
+```
+
+### set or clear a property for a service
+
+```shell
+# usage
+dokku clickhouse:set <service> <key> <value>
+```
+
+Set the network to attach after the service container is started:
+
+```shell
+dokku clickhouse:set lollipop post-create-network custom-network
+```
+
+Set multiple networks:
+
+```shell
+dokku clickhouse:set lollipop post-create-network custom-network,other-network
+```
+
+Unset the post-create-network value:
+
+```shell
+dokku clickhouse:set lollipop post-create-network
 ```
 
 ### Service Lifecycle
