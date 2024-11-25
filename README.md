@@ -24,6 +24,8 @@ sudo dokku plugin:install https://github.com/dokku/dokku-clickhouse.git clickhou
 
 ```
 clickhouse:app-links <app>                         # list all clickhouse service links for a given app
+clickhouse:backup-set-public-key-encryption <service> <public-key-id> # set GPG Public Key encryption for all future backups of clickhouse service
+clickhouse:backup-unset-public-key-encryption <service> # unset GPG Public Key encryption for future backups of the clickhouse service
 clickhouse:connect <service>                       # connect to the service via the clickhouse connection tool
 clickhouse:create <service> [--create-flags...]    # create a clickhouse service
 clickhouse:destroy <service> [-f|--force]          # delete the clickhouse service/data/container if there are no links left
@@ -523,6 +525,39 @@ List all apps linked to the `lollipop` clickhouse service.
 
 ```shell
 dokku clickhouse:links lollipop
+```
+### Backups
+
+Datastore backups are supported via AWS S3 and S3 compatible services like [minio](https://github.com/minio/minio).
+
+You may skip the `backup-auth` step if your dokku install is running within EC2 and has access to the bucket via an IAM profile. In that case, use the `--use-iam` option with the `backup` command.
+
+Backups can be performed using the backup commands:
+
+### set GPG Public Key encryption for all future backups of clickhouse service
+
+```shell
+# usage
+dokku clickhouse:backup-set-public-key-encryption <service> <public-key-id>
+```
+
+Set the `GPG` Public Key for encrypting backups:
+
+```shell
+dokku clickhouse:backup-set-public-key-encryption lollipop
+```
+
+### unset GPG Public Key encryption for future backups of the clickhouse service
+
+```shell
+# usage
+dokku clickhouse:backup-unset-public-key-encryption <service>
+```
+
+Unset the `GPG` Public Key encryption for backups:
+
+```shell
+dokku clickhouse:backup-unset-public-key-encryption lollipop
 ```
 
 ### Disabling `docker image pull` calls
