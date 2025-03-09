@@ -17,7 +17,7 @@ The clickhouse plugin was generously sponsored by the following:
 
 ```shell
 # on 0.19.x+
-sudo dokku plugin:install https://github.com/dokku/dokku-clickhouse.git clickhouse
+sudo dokku plugin:install https://github.com/dokku/dokku-clickhouse.git --name clickhouse
 ```
 
 ## Commands
