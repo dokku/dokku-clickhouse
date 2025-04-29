@@ -1,6 +1,6 @@
 # dokku clickhouse [![Build Status](https://img.shields.io/github/actions/workflow/status/dokku/dokku-clickhouse/ci.yml?branch=master&style=flat-square "Build Status")](https://github.com/dokku/dokku-clickhouse/actions/workflows/ci.yml?query=branch%3Amaster) [![IRC Network](https://img.shields.io/badge/irc-libera-blue.svg?style=flat-square "IRC Libera")](https://webchat.libera.chat/?channels=dokku)
 
-Official clickhouse plugin for dokku. Currently defaults to installing [clickhouse/clickhouse-server 25.3.2.39](https://hub.docker.com/r/clickhouse/clickhouse-server/).
+Official clickhouse plugin for dokku. Currently defaults to installing [clickhouse/clickhouse-server 25.4.1.2934](https://hub.docker.com/r/clickhouse/clickhouse-server/).
 
 ## Sponsors
 
