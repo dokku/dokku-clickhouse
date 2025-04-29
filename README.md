@@ -243,7 +243,7 @@ This will cause `CLICKHOUSE_URL` to be set as:
 clickhouse2://lollipop:SOME_PASSWORD@dokku-clickhouse-lollipop:9000/lollipop
 ```
 
-If you specify `CLICKHOUSE_DATABASE_SCHEME` to equal `http`, we`ll also automatically adjust`CLICKHOUSE_URL` to match the http interface:
+If you specify `CLICKHOUSE_DATABASE_SCHEME` to equal `http`, we`ll also automatically adjust `CLICKHOUSE_URL` to match the http interface:
 
 ```
 http://lollipop:SOME_PASSWORD@dokku-clickhouse-lollipop:${PLUGIN_DATASTORE_PORTS[1]}
@@ -526,7 +526,6 @@ List all apps linked to the `lollipop` clickhouse service.
 ```shell
 dokku clickhouse:links lollipop
 ```
-
 ### Backups
 
 Datastore backups are supported via AWS S3 and S3 compatible services like [minio](https://github.com/minio/minio).
