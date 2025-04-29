@@ -346,7 +346,7 @@ Expose the service on the service's normal ports, allowing access to it from the
 dokku clickhouse:expose lollipop 9000 8123
 ```
 
-Expose the service on the service's normal ports, with the first on a specified ip adddress (127.0.0.1):
+Expose the service on the service's normal ports, with the first on a specified ip address (127.0.0.1):
 
 ```shell
 dokku clickhouse:expose lollipop 127.0.0.1:9000 8123
