@@ -54,6 +54,7 @@ service_create() {
   "$DOCKER_BIN" run --rm --entrypoint cat "$PLUGIN_IMAGE:$PLUGIN_IMAGE_VERSION" /etc/clickhouse-server/users.xml >"$SERVICE_ROOT/$PLUGIN_CONFIG_SUFFIX/users.xml" || dokku_log_fail "Unable to get the default users.xml from the image to the config directory"
 
   cp "/var/lib/dokku/plugins/available/$PLUGIN_COMMAND_PREFIX/system_log_ttl_config.xml" "$SERVICE_ROOT/$PLUGIN_CONFIG_SUFFIX/config.d/system_log_ttl_config.xml" || dokku_log_fail "Unable to copy the default system log TTL config (system_log_ttl_config.xml) to the config directory"
+  cp "/var/lib/dokku/plugins/available/$PLUGIN_COMMAND_PREFIX/logger_log_to_console.xml" "$SERVICE_ROOT/$PLUGIN_CONFIG_SUFFIX/config.d/logger_log_to_console.xml" || dokku_log_fail "Unable to copy the default console logger config (logger_log_to_console.xml) to the config directory"
 
   PASSWORD=$(openssl rand -hex 8)
   if [[ -n "$SERVICE_PASSWORD" ]]; then
