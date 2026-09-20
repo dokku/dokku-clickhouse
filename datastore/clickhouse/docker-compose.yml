@@ -1,0 +1,86 @@
+---
+services:
+  clickhouse:
+    image: "{{ .Image }}:{{ .ImageVersion }}"
+
+    # the image creates the database and the account from these on first boot
+    environment:
+      CLICKHOUSE_DB: "{{ .Database }}"
+      CLICKHOUSE_PASSWORD: "{{ .Secret.password }}"
+      CLICKHOUSE_USER: "{{ .ServiceName }}"
+
+    volumes:
+      # this mounts over the directory the image keeps its own configuration
+      # in, which is why the pre create hook copies that configuration out
+      # first. Without it clickhouse starts with no configuration at all.
+      - type: bind
+        source: "{{ .HostRoot }}/config"
+        target: /etc/clickhouse-server
+      - type: bind
+        source: "{{ .HostRoot }}/data"
+        target: /var/lib/clickhouse
+
+    ports:
+      - name: native
+        target: 9000
+        primary: true
+      - name: http
+        target: 8123
+
+x-dokku:
+  plugin: clickhouse
+  title: Clickhouse
+  scheme: clickhouse
+  alias: CLICKHOUSE
+
+  # clickhouse answers on two ports with two protocols, and an app says which
+  # it wants by overriding the scheme. The url has to follow: the http port
+  # takes no database in the path, the native one does.
+  dsn: >-
+    {{ if eq .Scheme "http" -}}
+    http://{{ .ServiceName }}:{{ .Secret.password }}@{{ .Host }}:{{ .Port.http }}
+    {{- else -}}
+    {{ .Scheme }}://{{ .ServiceName }}:{{ .Secret.password }}@{{ .Host }}:{{ .Port.native }}/{{ .Database }}
+    {{- end }}
+
+  wait: native
+
+  secrets:
+    password:
+      file: PASSWORD
+      length: 16
+      env: SERVICE_PASSWORD
+
+  hooks:
+    pre_create:
+      # the image's own configuration, copied out before the mount hides it.
+      # It runs in the service's own image, so the files are exactly the ones
+      # that image ships rather than a copy this repo would have to keep up to
+      # date with every version.
+      volumes:
+        - type: bind
+          source: "{{ .HostRoot }}/config"
+          target: /seed
+      exec:
+        - sh
+        - -c
+        # -n so that an operator's edits are never overwritten: the files are
+        # theirs once they exist
+        # users.d as well as config.d: the image's entrypoint writes the
+        # account it is told to create into users.d, and fails if it is not
+        # there
+        - >-
+          mkdir -p /seed/config.d /seed/users.d &&
+          cp -n /etc/clickhouse-server/config.xml /seed/config.xml &&
+          cp -n /etc/clickhouse-server/users.xml /seed/users.xml &&
+          cp -n /etc/clickhouse-server/config.d/docker_related_config.xml /seed/config.d/docker_related_config.xml
+
+  commands:
+    connect:
+      exec: ["clickhouse", "client", "--user={{ .ServiceName }}", "--password={{ .Secret.password }}"]
+      env:
+        LANG: C.UTF-8
+        LC_ALL: C.UTF-8
+
+  # no export or import: the bash plugin implements neither, so clone and the
+  # backup family are unavailable too
