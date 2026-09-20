@@ -1,6 +1,6 @@
 # dokku clickhouse [![Build Status](https://img.shields.io/github/actions/workflow/status/dokku/dokku-clickhouse/ci.yml?branch=master&style=flat-square "Build Status")](https://github.com/dokku/dokku-clickhouse/actions/workflows/ci.yml?query=branch%3Amaster) [![IRC Network](https://img.shields.io/badge/irc-libera-blue.svg?style=flat-square "IRC Libera")](https://webchat.libera.chat/?channels=dokku)
 
-Official clickhouse plugin for dokku. Currently defaults to installing [clickhouse/clickhouse-server 26.5.1.882](https://hub.docker.com/r/clickhouse/clickhouse-server/).
+Official clickhouse plugin for dokku. Currently defaults to installing [clickhouse/clickhouse-server 26.8.5.13](https://hub.docker.com/r/clickhouse/clickhouse-server/).
 
 ## Sponsors
 
@@ -10,42 +10,40 @@ The clickhouse plugin was generously sponsored by the following:
 
 ## Requirements
 
-- dokku 0.19.x+
+- dokku 0.35.x+
 - docker 1.8.x
 
 ## Installation
 
 ```shell
-# on 0.19.x+
+# on 0.35.x+
 sudo dokku plugin:install https://github.com/dokku/dokku-clickhouse.git --name clickhouse
 ```
 
 ## Commands
 
 ```
-clickhouse:app-links <app>                         # list all clickhouse service links for a given app
-clickhouse:backup-set-public-key-encryption <service> <public-key-id> # set GPG Public Key encryption for all future backups of clickhouse service
-clickhouse:backup-unset-public-key-encryption <service> # unset GPG Public Key encryption for future backups of the clickhouse service
+clickhouse:app-links [<app>]                       # list all Clickhouse service links for a given app
 clickhouse:connect <service>                       # connect to the service via the clickhouse connection tool
-clickhouse:create <service> [--create-flags...]    # create a clickhouse service
-clickhouse:destroy <service> [-f|--force]          # delete the clickhouse service/data/container if there are no links left
-clickhouse:enter <service>                         # enter or run a command in a running clickhouse service container
-clickhouse:exists <service>                        # check if the clickhouse service exists
-clickhouse:expose <service> <ports...>             # expose a clickhouse service on custom host:port if provided (random port on the 0.0.0.0 interface if otherwise unspecified)
-clickhouse:info <service> [--single-info-flag]     # print the service information
-clickhouse:link <service> <app> [--link-flags...]  # link the clickhouse service to the app
-clickhouse:linked <service> <app>                  # check if the clickhouse service is linked to an app
-clickhouse:links <service>                         # list all apps linked to the clickhouse service
-clickhouse:list                                    # list all clickhouse services
-clickhouse:logs <service> [-t|--tail] <tail-num-optional> # print the most recent log(s) for this service
-clickhouse:pause <service>                         # pause a running clickhouse service
-clickhouse:promote <service> <app>                 # promote service <service> as CLICKHOUSE_URL in <app>
-clickhouse:restart <service>                       # graceful shutdown and restart of the clickhouse service container
+clickhouse:create <service> [--create-flags...]    # create a Clickhouse service
+clickhouse:destroy <service> [-f|--force]          # delete the Clickhouse service/data/container if there are no links left
+clickhouse:enter <service>                         # enter or run a command in a running Clickhouse service container
+clickhouse:exists <service>                        # check if the Clickhouse service exists
+clickhouse:expose <service> <ports...>             # expose a Clickhouse service on custom host:port if provided (random port on the 0.0.0.0 interface if otherwise unspecified)
+clickhouse:info <service> [--info-flags...]        # print the service information
+clickhouse:link <service> [<app>] [--link-flags...] # link the Clickhouse service to the app
+clickhouse:linked <service> [<app>]                # check if the Clickhouse service is linked to an app
+clickhouse:links <service>                         # list all apps linked to the Clickhouse service
+clickhouse:list                                    # list all Clickhouse services
+clickhouse:logs <service> [-t|--tail [<tail-num>]] # print the most recent log(s) for this service
+clickhouse:pause <service>                         # pause a running Clickhouse service
+clickhouse:promote <service> [<app>]               # promote service <service> as CLICKHOUSE_URL in <app>
+clickhouse:restart <service>                       # graceful shutdown and restart of the Clickhouse service container
 clickhouse:set <service> <key> <value>             # set or clear a property for a service
-clickhouse:start <service>                         # start a previously stopped clickhouse service
-clickhouse:stop <service>                          # stop a running clickhouse service
-clickhouse:unexpose <service>                      # unexpose a previously exposed clickhouse service
-clickhouse:unlink <service> <app>                  # unlink the clickhouse service from the app
+clickhouse:start <service>                         # start a previously stopped Clickhouse service
+clickhouse:stop <service>                          # stop a running Clickhouse service
+clickhouse:unexpose <service>                      # unexpose a previously exposed Clickhouse service
+clickhouse:unlink <service> [<app>] [-n|--no-restart] # unlink the Clickhouse service from the app
 clickhouse:upgrade <service> [--upgrade-flags...]  # upgrade service <service> to the specified versions
 ```
 
@@ -55,7 +53,7 @@ Help for any commands can be displayed by specifying the command as an argument 
 
 ### Basic Usage
 
-### create a clickhouse service
+### create a Clickhouse service
 
 ```shell
 # usage
@@ -64,17 +62,17 @@ dokku clickhouse:create <service> [--create-flags...]
 
 flags:
 
-- `-c|--config-options "--args --go=here"`: extra arguments to pass to the container create command (default: `None`)
-- `-C|--custom-env "USER=alpha;HOST=beta"`: semi-colon delimited environment variables to start the service with
-- `-i|--image IMAGE`: the image name to start the service with
-- `-I|--image-version IMAGE_VERSION`: the image version to start the service with
-- `-m|--memory MEMORY`: container memory limit in megabytes (default: unlimited)
-- `-N|--initial-network INITIAL_NETWORK`: the initial network to attach the service to
-- `-p|--password PASSWORD`: override the user-level service password
-- `-P|--post-create-network NETWORKS`: a comma-separated list of networks to attach the service container to after service creation
-- `-r|--root-password PASSWORD`: override the root-level service password
-- `-S|--post-start-network NETWORKS`: a comma-separated list of networks to attach the service container to after service start
-- `-s|--shm-size SHM_SIZE`: override shared memory size for clickhouse docker container
+- `-c|--config-options <string>`: extra arguments to pass to the container create command
+- `-C|--custom-env <string>`: semi-colon delimited environment variables to start the service with
+- `-i|--image <string>`: the image name to start the service with
+- `-I|--image-version <string>`: the image version to start the service with
+- `-N|--initial-network <string>`: the initial network to attach the service to
+- `-m|--memory <int>`: container memory limit in megabytes (default: unlimited)
+- `-p|--password <string>`: override the user-level service password
+- `-P|--post-create-network <strings>`: a comma-separated list of networks to attach the service container to after service creation
+- `-S|--post-start-network <strings>`: a comma-separated list of networks to attach the service container to after service start
+- `-r|--root-password <string>`: override the root-level service password
+- `-s|--shm-size <string>`: override shared memory size for the service docker container
 
 Create a clickhouse service named lollipop:
 
@@ -86,7 +84,7 @@ You can also specify the image and image version to use for the service. It *mus
 
 ```shell
 export CLICKHOUSE_IMAGE="clickhouse/clickhouse-server"
-export CLICKHOUSE_IMAGE_VERSION="${PLUGIN_IMAGE_VERSION}"
+export CLICKHOUSE_IMAGE_VERSION="26.8.5.13"
 dokku clickhouse:create lollipop
 ```
 
@@ -97,11 +95,28 @@ export CLICKHOUSE_CUSTOM_ENV="USER=alpha;HOST=beta"
 dokku clickhouse:create lollipop
 ```
 
+### delete the Clickhouse service/data/container if there are no links left
+
+```shell
+# usage
+dokku clickhouse:destroy <service> [-f|--force]
+```
+
+flags:
+
+- `-f|--force`: force the destruction of the service
+
+Destroy the service, it's data, and the running container:
+
+```shell
+dokku clickhouse:destroy lollipop
+```
+
 ### print the service information
 
 ```shell
 # usage
-dokku clickhouse:info <service> [--single-info-flag]
+dokku clickhouse:info <service> [--info-flags...]
 ```
 
 flags:
@@ -111,8 +126,8 @@ flags:
 - `--dsn`: show the service DSN
 - `--exposed-ports`: show service exposed ports
 - `--id`: show the service container id
-- `--internal-ip`: show the service internal ip
 - `--initial-network`: show the initial network being connected to
+- `--internal-ip`: show the service internal ip
 - `--links`: show the service app links
 - `--post-create-network`: show the networks to attach to after service container creation
 - `--post-start-network`: show the networks to attach to after service container start
@@ -144,7 +159,7 @@ dokku clickhouse:info lollipop --status
 dokku clickhouse:info lollipop --version
 ```
 
-### list all clickhouse services
+### list all Clickhouse services
 
 ```shell
 # usage
@@ -161,12 +176,12 @@ dokku clickhouse:list
 
 ```shell
 # usage
-dokku clickhouse:logs <service> [-t|--tail] <tail-num-optional>
+dokku clickhouse:logs <service> [-t|--tail [<tail-num>]]
 ```
 
 flags:
 
-- `-t|--tail [<tail-num>]`: do not stop when end of the logs are reached and wait for additional output
+- `-t|--tail <int>`: tail the logs, optionally showing this many lines
 
 You can tail logs for a particular service:
 
@@ -180,24 +195,24 @@ By default, logs will not be tailed, but you can do this with the --tail flag:
 dokku clickhouse:logs lollipop --tail
 ```
 
-The default tail setting is to show all logs, but an initial count can also be specified:
+By default the last 100 lines are shown, but a different count can be specified:
 
 ```shell
-dokku clickhouse:logs lollipop --tail 5
+dokku clickhouse:logs lollipop --tail=5
 ```
 
-### link the clickhouse service to the app
+### link the Clickhouse service to the app
 
 ```shell
 # usage
-dokku clickhouse:link <service> <app> [--link-flags...]
+dokku clickhouse:link <service> [<app>] [--link-flags...]
 ```
 
 flags:
 
-- `-a|--alias "BLUE_DATABASE"`: an alternative alias to use for linking to an app via environment variable
-- `-q|--querystring "pool=5"`: ampersand delimited querystring arguments to append to the service link
-- `-n|--no-restart "false"`: whether or not to restart the app on link (default: true)
+- `-a|--alias <string>`: an alternative alias to use for the config url exported to the app
+- `-n|--no-restart`: whether to skip restarting the app
+- `-q|--querystring <string>`: ampersand delimited querystring arguments to append to the service url
 
 A clickhouse service can be linked to a container. This will use native docker links via the docker-options plugin. Here we link it to our `playground` app.
 
@@ -221,7 +236,7 @@ DOKKU_CLICKHOUSE_LOLLIPOP_PORT_9000_TCP_ADDR=172.17.0.1
 The following will be set on the linked application by default:
 
 ```
-CLICKHOUSE_URL=clickhouse://lollipop:SOME_PASSWORD@dokku-clickhouse-lollipop:9000/lollipop
+CLICKHOUSE_URL=clickhouse://:SOME_PASSWORD@dokku-clickhouse-lollipop:9000
 ```
 
 The host exposed here only works internally in docker containers. If you want your container to be reachable from outside, you should use the `expose` subcommand. Another service can be linked to your app:
@@ -240,25 +255,19 @@ dokku clickhouse:link lollipop playground
 This will cause `CLICKHOUSE_URL` to be set as:
 
 ```
-clickhouse2://lollipop:SOME_PASSWORD@dokku-clickhouse-lollipop:9000/lollipop
+clickhouse2://:SOME_PASSWORD@dokku-clickhouse-lollipop:9000
 ```
 
-If you specify `CLICKHOUSE_DATABASE_SCHEME` to equal `http`, we`ll also automatically adjust `CLICKHOUSE_URL` to match the http interface:
-
-```
-http://lollipop:SOME_PASSWORD@dokku-clickhouse-lollipop:${PLUGIN_DATASTORE_PORTS[1]}
-```
-
-### unlink the clickhouse service from the app
+### unlink the Clickhouse service from the app
 
 ```shell
 # usage
-dokku clickhouse:unlink <service> <app>
+dokku clickhouse:unlink <service> [<app>] [-n|--no-restart]
 ```
 
 flags:
 
-- `-n|--no-restart "false"`: whether or not to restart the app on unlink (default: true)
+- `-n|--no-restart`: whether to skip restarting the app
 
 You can unlink a clickhouse service:
 
@@ -293,6 +302,12 @@ Unset the post-create-network value:
 dokku clickhouse:set lollipop post-create-network
 ```
 
+Set the keyserver a public key for backup encryption is fetched from:
+
+```shell
+dokku clickhouse:set lollipop backup-keyserver hkp://keys.example.com
+```
+
 ### Service Lifecycle
 
 The lifecycle of each service can be managed through the following commands:
@@ -312,7 +327,7 @@ Connect to the service via the clickhouse connection tool:
 dokku clickhouse:connect lollipop
 ```
 
-### enter or run a command in a running clickhouse service container
+### enter or run a command in a running Clickhouse service container
 
 ```shell
 # usage
@@ -333,7 +348,7 @@ You may also run a command directly against the service. Filesystem changes will
 dokku clickhouse:enter lollipop touch /tmp/test
 ```
 
-### expose a clickhouse service on custom host:port if provided (random port on the 0.0.0.0 interface if otherwise unspecified)
+### expose a Clickhouse service on custom host:port if provided (random port on the 0.0.0.0 interface if otherwise unspecified)
 
 ```shell
 # usage
@@ -352,7 +367,7 @@ Expose the service on the service's normal ports, with the first on a specified 
 dokku clickhouse:expose lollipop 127.0.0.1:9000 8123
 ```
 
-### unexpose a previously exposed clickhouse service
+### unexpose a previously exposed Clickhouse service
 
 ```shell
 # usage
@@ -369,13 +384,13 @@ dokku clickhouse:unexpose lollipop
 
 ```shell
 # usage
-dokku clickhouse:promote <service> <app>
+dokku clickhouse:promote <service> [<app>]
 ```
 
 If you have a clickhouse service linked to an app and try to link another clickhouse service another link environment variable will be generated automatically:
 
 ```
-DOKKU_CLICKHOUSE_BLUE_URL=clickhouse://other_service:ANOTHER_PASSWORD@dokku-clickhouse-other-service:9000/other_service
+DOKKU_CLICKHOUSE_BLUE_URL=clickhouse://:ANOTHER_PASSWORD@dokku-clickhouse-other-service:9000/other_service
 ```
 
 You can promote the new service to be the primary one:
@@ -389,12 +404,12 @@ dokku clickhouse:promote other_service playground
 This will replace `CLICKHOUSE_URL` with the url from other_service and generate another environment variable to hold the previous value if necessary. You could end up with the following for example:
 
 ```
-CLICKHOUSE_URL=clickhouse://other_service:ANOTHER_PASSWORD@dokku-clickhouse-other-service:9000/other_service
-DOKKU_CLICKHOUSE_BLUE_URL=clickhouse://other_service:ANOTHER_PASSWORD@dokku-clickhouse-other-service:9000/other_service
-DOKKU_CLICKHOUSE_SILVER_URL=clickhouse://lollipop:SOME_PASSWORD@dokku-clickhouse-lollipop:9000/lollipop
+CLICKHOUSE_URL=clickhouse://:ANOTHER_PASSWORD@dokku-clickhouse-other-service:9000/other_service
+DOKKU_CLICKHOUSE_BLUE_URL=clickhouse://:ANOTHER_PASSWORD@dokku-clickhouse-other-service:9000/other_service
+DOKKU_CLICKHOUSE_SILVER_URL=clickhouse://:SOME_PASSWORD@dokku-clickhouse-lollipop:9000/lollipop
 ```
 
-### start a previously stopped clickhouse service
+### start a previously stopped Clickhouse service
 
 ```shell
 # usage
@@ -407,7 +422,7 @@ Start the service:
 dokku clickhouse:start lollipop
 ```
 
-### stop a running clickhouse service
+### stop a running Clickhouse service
 
 ```shell
 # usage
@@ -420,7 +435,7 @@ Stop the service and removes the running container:
 dokku clickhouse:stop lollipop
 ```
 
-### pause a running clickhouse service
+### pause a running Clickhouse service
 
 ```shell
 # usage
@@ -433,7 +448,7 @@ Pause the running container for the service:
 dokku clickhouse:pause lollipop
 ```
 
-### graceful shutdown and restart of the clickhouse service container
+### graceful shutdown and restart of the Clickhouse service container
 
 ```shell
 # usage
@@ -455,15 +470,15 @@ dokku clickhouse:upgrade <service> [--upgrade-flags...]
 
 flags:
 
-- `-c|--config-options "--args --go=here"`: extra arguments to pass to the container create command (default: `None`)
-- `-C|--custom-env "USER=alpha;HOST=beta"`: semi-colon delimited environment variables to start the service with
-- `-i|--image IMAGE`: the image name to start the service with
-- `-I|--image-version IMAGE_VERSION`: the image version to start the service with
-- `-N|--initial-network INITIAL_NETWORK`: the initial network to attach the service to
-- `-P|--post-create-network NETWORKS`: a comma-separated list of networks to attach the service container to after service creation
-- `-R|--restart-apps "true"`: whether or not to force an app restart (default: false)
-- `-S|--post-start-network NETWORKS`: a comma-separated list of networks to attach the service container to after service start
-- `-s|--shm-size SHM_SIZE`: override shared memory size for clickhouse docker container
+- `-c|--config-options <string>`: extra arguments to pass to the container create command
+- `-C|--custom-env <string>`: semi-colon delimited environment variables to start the service with
+- `-i|--image <string>`: the image to upgrade the service to
+- `-I|--image-version <string>`: the image version to upgrade the service to
+- `-N|--initial-network <string>`: the initial network to attach the service to
+- `-P|--post-create-network <strings>`: a comma-separated list of networks to attach the service container to after service creation
+- `-S|--post-start-network <strings>`: a comma-separated list of networks to attach the service container to after service start
+- `-R|--restart-apps`: whether to stop and start the linked apps around the upgrade
+- `-s|--shm-size <string>`: override shared memory size for the service docker container
 
 You can upgrade an existing service to a new image or image-version:
 
@@ -475,11 +490,11 @@ dokku clickhouse:upgrade lollipop
 
 Service scripting can be executed using the following commands:
 
-### list all clickhouse service links for a given app
+### list all Clickhouse service links for a given app
 
 ```shell
 # usage
-dokku clickhouse:app-links <app>
+dokku clickhouse:app-links [<app>]
 ```
 
 List all clickhouse services that are linked to the `playground` app.
@@ -488,7 +503,7 @@ List all clickhouse services that are linked to the `playground` app.
 dokku clickhouse:app-links playground
 ```
 
-### check if the clickhouse service exists
+### check if the Clickhouse service exists
 
 ```shell
 # usage
@@ -501,11 +516,11 @@ Here we check if the lollipop clickhouse service exists.
 dokku clickhouse:exists lollipop
 ```
 
-### check if the clickhouse service is linked to an app
+### check if the Clickhouse service is linked to an app
 
 ```shell
 # usage
-dokku clickhouse:linked <service> <app>
+dokku clickhouse:linked <service> [<app>]
 ```
 
 Here we check if the lollipop clickhouse service is linked to the `playground` app.
@@ -514,7 +529,7 @@ Here we check if the lollipop clickhouse service is linked to the `playground` a
 dokku clickhouse:linked lollipop playground
 ```
 
-### list all apps linked to the clickhouse service
+### list all apps linked to the Clickhouse service
 
 ```shell
 # usage
@@ -525,45 +540,6 @@ List all apps linked to the `lollipop` clickhouse service.
 
 ```shell
 dokku clickhouse:links lollipop
-```
-### Backups
-
-Datastore backups are supported via AWS S3 and S3 compatible services like [minio](https://github.com/minio/minio).
-
-You may skip the `backup-auth` step if your dokku install is running within EC2 and has access to the bucket via an IAM profile. In that case, use the `--use-iam` option with the `backup` command.
-
-If both passphrase and public key forms of encryption are set, the public key encryption will take precedence.
-
-The underlying core backup script is present [here](https://github.com/dokku/docker-s3backup/blob/main/backup.sh).
-
-Backups can be performed using the backup commands:
-
-### set GPG Public Key encryption for all future backups of clickhouse service
-
-```shell
-# usage
-dokku clickhouse:backup-set-public-key-encryption <service> <public-key-id>
-```
-
-Set the `GPG` Public Key for encrypting backups:
-
-```shell
-dokku clickhouse:backup-set-public-key-encryption lollipop
-```
-
-This method currently requires the <public-key-id> to be present on the keyserver `keyserver.ubuntu.com`:
-
-### unset GPG Public Key encryption for future backups of the clickhouse service
-
-```shell
-# usage
-dokku clickhouse:backup-unset-public-key-encryption <service>
-```
-
-Unset the `GPG` Public Key encryption for backups:
-
-```shell
-dokku clickhouse:backup-unset-public-key-encryption lollipop
 ```
 
 ### Disabling `docker image pull` calls
