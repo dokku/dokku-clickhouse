@@ -1,6 +1,6 @@
 # dokku clickhouse [![Build Status](https://img.shields.io/github/actions/workflow/status/dokku/dokku-clickhouse/ci.yml?branch=master&style=flat-square "Build Status")](https://github.com/dokku/dokku-clickhouse/actions/workflows/ci.yml?query=branch%3Amaster) [![IRC Network](https://img.shields.io/badge/irc-libera-blue.svg?style=flat-square "IRC Libera")](https://webchat.libera.chat/?channels=dokku)
 
-Official clickhouse plugin for dokku. Currently defaults to installing [clickhouse/clickhouse-server 26.8.9.10](https://hub.docker.com/r/clickhouse/clickhouse-server/).
+Official clickhouse plugin for dokku. Currently defaults to installing [clickhouse/clickhouse-server 26.9.1.1629](https://hub.docker.com/r/clickhouse/clickhouse-server/).
 
 ## Sponsors
 
@@ -90,7 +90,7 @@ You can also specify the image and image version to use for the service. It *mus
 
 ```shell
 export CLICKHOUSE_IMAGE="clickhouse/clickhouse-server"
-export CLICKHOUSE_IMAGE_VERSION="26.8.9.10"
+export CLICKHOUSE_IMAGE_VERSION="26.9.1.1629"
 dokku clickhouse:create lollipop
 ```
 
@@ -496,6 +496,12 @@ Connect to the service via the clickhouse connection tool:
 dokku clickhouse:connect lollipop
 ```
 
+The connection tool only shows a prompt when it is given a terminal, which ssh allocates when run with -t. Without a terminal, statements are read from stdin instead.
+
+```shell
+dokku clickhouse:connect lollipop < statements.txt
+```
+
 ### enter or run a command in a running Clickhouse service container
 
 ```shell
@@ -503,7 +509,7 @@ dokku clickhouse:connect lollipop
 dokku clickhouse:enter <service>
 ```
 
-A bash prompt can be opened against a running service. Filesystem changes will not be saved to disk.
+A shell can be opened against a running service. Filesystem changes will not be saved to disk.
 
 > NOTE: disconnecting from ssh while running this command may leave zombie processes due to moby/moby#9098
 
