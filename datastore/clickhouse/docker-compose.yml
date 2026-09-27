@@ -76,6 +76,9 @@ x-dokku:
           cp -n /etc/clickhouse-server/config.d/docker_related_config.xml /seed/config.d/docker_related_config.xml
 
   commands:
+    # without a terminal, as over ssh without -t, the client reads all of stdin
+    # before it runs anything, so no result is shown until stdin is closed.
+    # None of its options changes that.
     connect:
       exec: ["clickhouse", "client", "--user={{ .ServiceName }}", "--password={{ .Secret.password }}"]
       env:
