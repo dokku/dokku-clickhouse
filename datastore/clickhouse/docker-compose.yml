@@ -87,3 +87,7 @@ x-dokku:
 
   # no export or import: the bash plugin implements neither, so clone and the
   # backup family are unavailable too
+
+  # the databases the server keeps for itself. default is left out: it is only
+  # the default database, and a service named after it works
+  reserved_names: [information_schema, system]
