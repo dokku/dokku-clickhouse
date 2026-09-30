@@ -56,7 +56,9 @@ x-dokku:
       # the image's own configuration, copied out before the mount hides it.
       # It runs in the service's own image, so the files are exactly the ones
       # that image ships rather than a copy this repo would have to keep up to
-      # date with every version.
+      # date with every version. Copied from where the image keeps it, which a
+      # service moving its config volume does not change, since the hook runs
+      # in a container of its own without the service's volumes.
       volumes:
         - type: bind
           source: "{{ .HostRoot }}/config"
@@ -85,5 +87,44 @@ x-dokku:
         LANG: C.UTF-8
         LC_ALL: C.UTF-8
 
-  # no export or import: the bash plugin implements neither, so clone and the
-  # backup family are unavailable too
+    # both dump verbs are vendored scripts around clickhouse's own BACKUP and
+    # RESTORE, the only dump that carries every table engine, view and
+    # dictionary as the server knows them. The server reads and writes the
+    # archive on its own filesystem, so the scripts run beside it with the
+    # service's volumes: a sidecar reaches the file the server wrote, and works
+    # against a service whose container was created before the scripts existed,
+    # or by the bash plugin, without recreating it first.
+    #
+    # The archive stores the database under a fixed name, so an export from one
+    # service imports into any other, which is what clone relies on. Only
+    # archives written by this export can be imported.
+    #
+    # The credentials go in their own variables rather than the CLICKHOUSE_
+    # ones, which the image's entrypoint and the client both read for
+    # themselves.
+    export:
+      mode: sidecar
+      exec: ["dokku-clickhouse-export"]
+      env:
+        BACKUP_CONFIG: "{{ .Target.config }}/config.d/dokku-backups.xml"
+        CONFIG_FILE: "{{ .Target.config }}/config.xml"
+        DOKKU_CLICKHOUSE_DATABASE: "{{ .Database }}"
+        DOKKU_CLICKHOUSE_PASSWORD: "{{ .Secret.password }}"
+        DOKKU_CLICKHOUSE_USER: "{{ .ServiceName }}"
+
+    import:
+      # restored beside the live database and swapped in only once the restore
+      # succeeds, so an archive that fails to restore leaves the data alone
+      mode: sidecar
+      stdin: true
+      exec: ["dokku-clickhouse-import"]
+      env:
+        BACKUP_CONFIG: "{{ .Target.config }}/config.d/dokku-backups.xml"
+        CONFIG_FILE: "{{ .Target.config }}/config.xml"
+        DOKKU_CLICKHOUSE_DATABASE: "{{ .Database }}"
+        DOKKU_CLICKHOUSE_PASSWORD: "{{ .Secret.password }}"
+        DOKKU_CLICKHOUSE_USER: "{{ .ServiceName }}"
+
+  # the databases the server keeps for itself. default is left out: it is only
+  # the default database, and a service named after it works
+  reserved_names: [information_schema, system]
