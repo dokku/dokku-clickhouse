@@ -1,1 +1,1 @@
-FROM clickhouse/clickhouse-server:26.9.1.1629
+FROM clickhouse/clickhouse-server:26.9.3.38

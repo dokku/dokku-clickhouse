@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+# dokku-clickhouse-import replaces the service's database with the backup that
+# arrives on stdin.
+#
+# The backup is one written by dokku-clickhouse-export, which stores the
+# database under a fixed name so that it can be restored under any other. It is
+# restored beside the live database first and only swapped in once the restore
+# has succeeded, so an archive that fails to restore leaves the data as it was.
+#
+# The password arrives in the environment rather than on the command line, and
+# reaches the client through a config file, so it never shows up in the
+# container's process table.
+set -eo pipefail
+
+CONFIG_FILE="${CONFIG_FILE:-/etc/clickhouse-server/config.xml}"
+BACKUP_CONFIG="${BACKUP_CONFIG:-/etc/clickhouse-server/config.d/dokku-backups.xml}"
+BACKUP_OWNER="${BACKUP_OWNER:-clickhouse}"
+# the name dokku-clickhouse-export stores the database under inside the archive
+BACKUP_DATABASE="dokku"
+TIMEOUT_SECONDS="${CONFIG_RELOAD_TIMEOUT_SECONDS:-30}"
+
+CLIENT_CONFIG=""
+BACKUP_FILE=""
+STAGING_DATABASE=""
+
+cleanup() {
+  # a staging database left behind means the swap never happened, so the live
+  # database is untouched and the half restored copy is only in the way
+  if [[ -n "$STAGING_DATABASE" ]]; then
+    query "DROP DATABASE IF EXISTS \`${STAGING_DATABASE}\` SYNC" >/dev/null 2>&1 || true
+  fi
+
+  rm -f "$CLIENT_CONFIG" "$BACKUP_FILE"
+}
+
+# backup_dir prints the directory the server is allowed to read backups from.
+#
+# The image's config.xml allows one relative to the data path, and a service
+# seeded from it has that. A config without one, from an older image or edited
+# by hand, gets a directory of our own through config.d, which the server picks
+# up on its next config reload.
+backup_dir() {
+  declare allowed data_dir
+
+  data_dir="$(clickhouse extract-from-config --config-file "$CONFIG_FILE" --key=path 2>/dev/null)"
+  allowed="$(clickhouse extract-from-config --config-file "$CONFIG_FILE" --key=backups.allowed_path --try 2>/dev/null || true)"
+
+  if [[ -z "$allowed" ]]; then
+    allowed="${data_dir%/}/dokku-backups/"
+    cat >"$BACKUP_CONFIG" <<EOF
+<clickhouse>
+  <!-- written by dokku-clickhouse-import so that RESTORE has a directory to read from -->
+  <backups>
+    <allowed_path>$allowed</allowed_path>
+  </backups>
+</clickhouse>
+EOF
+    chown "$BACKUP_OWNER:" "$BACKUP_CONFIG"
+  fi
+
+  if [[ "$allowed" != /* ]]; then
+    allowed="${data_dir%/}/$allowed"
+  fi
+
+  mkdir -p "$allowed"
+  chown "$BACKUP_OWNER:" "$allowed"
+  echo "${allowed%/}"
+}
+
+# write_client_config puts the credentials where the client reads them, so they
+# are not in its argv
+write_client_config() {
+  CLIENT_CONFIG="$(mktemp)"
+  chmod 0600 "$CLIENT_CONFIG"
+  cat >"$CLIENT_CONFIG" <<EOF
+<config>
+  <user><![CDATA[${DOKKU_CLICKHOUSE_USER//]]>/]]]]><![CDATA[>}]]></user>
+  <password><![CDATA[${DOKKU_CLICKHOUSE_PASSWORD//]]>/]]]]><![CDATA[>}]]></password>
+</config>
+EOF
+}
+
+# query runs a statement against the service. The session sits in the system
+# database, so that it is never inside the database being replaced.
+query() {
+  clickhouse client --config-file "$CLIENT_CONFIG" --host localhost --database system --query "$1"
+}
+
+# reload_pending is true when the server refused a backup path because the
+# config allowing it has not been loaded yet: either no path is allowed at all,
+# or the one written to config.d is not among those it knows
+reload_pending() {
+  declare output="$1"
+  [[ "$output" == *"backups.allowed_path"* ]] || [[ "$output" == *"not allowed for backups"* ]]
+}
+
+# query_retrying runs a statement that reads or writes the backup directory. A
+# directory that was only just allowed through config.d is refused until the
+# server reloads its config, so that one refusal is waited out.
+query_retrying() {
+  declare statement="$1"
+  declare output waited=0
+
+  while true; do
+    if output="$(query "$statement" 2>&1)"; then
+      return 0
+    fi
+
+    if ! reload_pending "$output" || [[ "$waited" -ge "$TIMEOUT_SECONDS" ]]; then
+      echo "$output" >&2
+      return 1
+    fi
+
+    sleep 1
+    waited=$((waited + 1))
+  done
+}
+
+main() {
+  declare database dir exists name previous
+
+  : "${DOKKU_CLICKHOUSE_USER:?DOKKU_CLICKHOUSE_USER is required}"
+  : "${DOKKU_CLICKHOUSE_DATABASE:?DOKKU_CLICKHOUSE_DATABASE is required}"
+
+  database="$DOKKU_CLICKHOUSE_DATABASE"
+  previous="${database}_dokku_previous"
+
+  trap cleanup EXIT
+  write_client_config
+  dir="$(backup_dir)"
+
+  # unique so that two imports into the same service never share a file
+  name="dokku-import-$(date +%s)-$RANDOM$RANDOM.zip"
+  BACKUP_FILE="$dir/$name"
+  cat >"$BACKUP_FILE"
+  chown "$BACKUP_OWNER:" "$BACKUP_FILE"
+
+  # a staging database from an import that died before its cleanup ran is
+  # dropped rather than restored over, since RESTORE refuses a database that
+  # already has tables
+  STAGING_DATABASE="${database}_dokku_import"
+  query "DROP DATABASE IF EXISTS \`${STAGING_DATABASE}\` SYNC" >/dev/null
+  query_retrying "RESTORE DATABASE \`${BACKUP_DATABASE}\` AS \`${STAGING_DATABASE}\` FROM File('${name}')" >/dev/null
+
+  # the swap. Renaming a database is a metadata change, so the window in which
+  # the service has no database under its name is short, and nothing is dropped
+  # until the restored copy is in place.
+  query "DROP DATABASE IF EXISTS \`${previous}\` SYNC" >/dev/null
+  exists="$(query "SELECT count() FROM system.databases WHERE name = '${database}'")"
+  if [[ "$exists" != "0" ]]; then
+    query "RENAME DATABASE \`${database}\` TO \`${previous}\`" >/dev/null
+  fi
+
+  if ! query "RENAME DATABASE \`${STAGING_DATABASE}\` TO \`${database}\`" >/dev/null; then
+    # the live database is put back under its name before the staging copy is
+    # dropped, so a failed swap leaves the service as it was
+    if [[ "$exists" != "0" ]]; then
+      query "RENAME DATABASE \`${previous}\` TO \`${database}\`" >/dev/null
+    fi
+    return 1
+  fi
+
+  STAGING_DATABASE=""
+  query "DROP DATABASE IF EXISTS \`${previous}\` SYNC" >/dev/null
+}
+
+main "$@"

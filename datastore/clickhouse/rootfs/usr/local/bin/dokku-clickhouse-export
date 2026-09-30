@@ -1,0 +1,134 @@
+#!/usr/bin/env bash
+# dokku-clickhouse-export writes a backup of the service's database to stdout.
+#
+# The backup is clickhouse's own BACKUP archive, which is the only dump that
+# carries every table engine, view and dictionary as the server knows them. The
+# server writes it into its backup directory, which is on the data volume this
+# sidecar shares, so it is read from there and removed once it has been sent.
+#
+# Everything diagnostic goes to stderr. Stdout carries a binary zip archive, and
+# a single stray line of output there would corrupt the dump without failing.
+#
+# The password arrives in the environment rather than on the command line, and
+# reaches the client through a config file, so it never shows up in the
+# container's process table.
+set -eo pipefail
+
+CONFIG_FILE="${CONFIG_FILE:-/etc/clickhouse-server/config.xml}"
+BACKUP_CONFIG="${BACKUP_CONFIG:-/etc/clickhouse-server/config.d/dokku-backups.xml}"
+BACKUP_OWNER="${BACKUP_OWNER:-clickhouse}"
+# the name the database is stored under inside the archive, which is what lets
+# an archive from one service be restored into any other
+BACKUP_DATABASE="dokku"
+TIMEOUT_SECONDS="${CONFIG_RELOAD_TIMEOUT_SECONDS:-30}"
+
+CLIENT_CONFIG=""
+BACKUP_FILE=""
+
+cleanup() {
+  rm -f "$CLIENT_CONFIG" "$BACKUP_FILE"
+}
+
+# backup_dir prints the directory the server is allowed to write backups to.
+#
+# The image's config.xml allows one relative to the data path, and a service
+# seeded from it has that. A config without one, from an older image or edited
+# by hand, gets a directory of our own through config.d, which the server picks
+# up on its next config reload.
+backup_dir() {
+  declare allowed data_dir
+
+  data_dir="$(clickhouse extract-from-config --config-file "$CONFIG_FILE" --key=path 2>/dev/null)"
+  allowed="$(clickhouse extract-from-config --config-file "$CONFIG_FILE" --key=backups.allowed_path --try 2>/dev/null || true)"
+
+  if [[ -z "$allowed" ]]; then
+    allowed="${data_dir%/}/dokku-backups/"
+    cat >"$BACKUP_CONFIG" <<EOF
+<clickhouse>
+  <!-- written by dokku-clickhouse-export so that BACKUP has a directory to write to -->
+  <backups>
+    <allowed_path>$allowed</allowed_path>
+  </backups>
+</clickhouse>
+EOF
+    chown "$BACKUP_OWNER:" "$BACKUP_CONFIG"
+  fi
+
+  if [[ "$allowed" != /* ]]; then
+    allowed="${data_dir%/}/$allowed"
+  fi
+
+  mkdir -p "$allowed"
+  chown "$BACKUP_OWNER:" "$allowed"
+  echo "${allowed%/}"
+}
+
+# write_client_config puts the credentials where the client reads them, so they
+# are not in its argv
+write_client_config() {
+  CLIENT_CONFIG="$(mktemp)"
+  chmod 0600 "$CLIENT_CONFIG"
+  cat >"$CLIENT_CONFIG" <<EOF
+<config>
+  <user><![CDATA[${DOKKU_CLICKHOUSE_USER//]]>/]]]]><![CDATA[>}]]></user>
+  <password><![CDATA[${DOKKU_CLICKHOUSE_PASSWORD//]]>/]]]]><![CDATA[>}]]></password>
+</config>
+EOF
+}
+
+# query runs a statement against the service. The session sits in the system
+# database, so that it is never inside the database being backed up or
+# replaced.
+query() {
+  clickhouse client --config-file "$CLIENT_CONFIG" --host localhost --database system --query "$1"
+}
+
+# reload_pending is true when the server refused a backup path because the
+# config allowing it has not been loaded yet: either no path is allowed at all,
+# or the one written to config.d is not among those it knows
+reload_pending() {
+  declare output="$1"
+  [[ "$output" == *"backups.allowed_path"* ]] || [[ "$output" == *"not allowed for backups"* ]]
+}
+
+# query_retrying runs a statement that reads or writes the backup directory. A
+# directory that was only just allowed through config.d is refused until the
+# server reloads its config, so that one refusal is waited out.
+query_retrying() {
+  declare statement="$1"
+  declare output waited=0
+
+  while true; do
+    if output="$(query "$statement" 2>&1)"; then
+      return 0
+    fi
+
+    if ! reload_pending "$output" || [[ "$waited" -ge "$TIMEOUT_SECONDS" ]]; then
+      echo "$output" >&2
+      return 1
+    fi
+
+    sleep 1
+    waited=$((waited + 1))
+  done
+}
+
+main() {
+  declare dir name
+
+  : "${DOKKU_CLICKHOUSE_USER:?DOKKU_CLICKHOUSE_USER is required}"
+  : "${DOKKU_CLICKHOUSE_DATABASE:?DOKKU_CLICKHOUSE_DATABASE is required}"
+
+  trap cleanup EXIT
+  write_client_config
+  dir="$(backup_dir)"
+
+  # unique so that two exports of the same service never share a file
+  name="dokku-export-$(date +%s)-$RANDOM$RANDOM.zip"
+  BACKUP_FILE="$dir/$name"
+
+  query_retrying "BACKUP DATABASE \`${DOKKU_CLICKHOUSE_DATABASE}\` AS \`${BACKUP_DATABASE}\` TO File('${name}')" >/dev/null
+  cat "$BACKUP_FILE"
+}
+
+main "$@"
