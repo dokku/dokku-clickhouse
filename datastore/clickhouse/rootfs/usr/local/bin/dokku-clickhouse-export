@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # dokku-clickhouse-export writes a backup of the service's database to stdout.
 #
+# With DOKKU_CLICKHOUSE_ALL_DATABASES set to true, the backup holds every
+# database on the server instead, under the names they have, leaving out the
+# ones the server keeps for itself, an empty default database, and the staging
+# copies an import that died part way left behind.
+#
 # The backup is clickhouse's own BACKUP archive, which is the only dump that
 # carries every table engine, view and dictionary as the server knows them. The
 # server writes it into its backup directory, which is on the data volume this
@@ -20,6 +25,7 @@ BACKUP_OWNER="${BACKUP_OWNER:-clickhouse}"
 # the name the database is stored under inside the archive, which is what lets
 # an archive from one service be restored into any other
 BACKUP_DATABASE="dokku"
+ALL_DATABASES="${DOKKU_CLICKHOUSE_ALL_DATABASES:-false}"
 TIMEOUT_SECONDS="${CONFIG_RELOAD_TIMEOUT_SECONDS:-30}"
 
 CLIENT_CONFIG=""
@@ -113,8 +119,46 @@ query_retrying() {
   done
 }
 
+# quote_identifier quotes a name for a statement, whatever it holds
+quote_identifier() {
+  declare name="$1"
+  name="${name//\\/\\\\}"
+  echo "\`${name//\`/\\\`}\`"
+}
+
+# backup_targets prints what the BACKUP statement backs up: the service's own
+# database under the fixed name, or every database under its own
+backup_targets() {
+  declare database listing targets=()
+
+  if [[ "$ALL_DATABASES" != "true" ]]; then
+    echo "DATABASE $(quote_identifier "$DOKKU_CLICKHOUSE_DATABASE") AS $(quote_identifier "$BACKUP_DATABASE")"
+    return
+  fi
+
+  listing="$(query "SELECT name FROM system.databases
+    WHERE name NOT IN ('system', 'INFORMATION_SCHEMA', 'information_schema')
+      AND (name != 'default' OR name IN (SELECT database FROM system.tables))
+      AND NOT endsWith(name, '_dokku_import') AND NOT endsWith(name, '_dokku_previous')
+    ORDER BY name FORMAT TSVRaw")" || return 1
+
+  while IFS= read -r database; do
+    if [[ -n "$database" ]]; then
+      targets+=("DATABASE $(quote_identifier "$database")")
+    fi
+  done <<<"$listing"
+
+  if [[ "${#targets[@]}" -eq 0 ]]; then
+    echo "there are no databases to back up" >&2
+    return 1
+  fi
+
+  declare IFS=,
+  echo "${targets[*]}"
+}
+
 main() {
-  declare dir name
+  declare dir name targets
 
   : "${DOKKU_CLICKHOUSE_USER:?DOKKU_CLICKHOUSE_USER is required}"
   : "${DOKKU_CLICKHOUSE_DATABASE:?DOKKU_CLICKHOUSE_DATABASE is required}"
@@ -127,7 +171,8 @@ main() {
   name="dokku-export-$(date +%s)-$RANDOM$RANDOM.zip"
   BACKUP_FILE="$dir/$name"
 
-  query_retrying "BACKUP DATABASE \`${DOKKU_CLICKHOUSE_DATABASE}\` AS \`${BACKUP_DATABASE}\` TO File('${name}')" >/dev/null
+  targets="$(backup_targets)"
+  query_retrying "BACKUP ${targets} TO File('${name}')" >/dev/null
   cat "$BACKUP_FILE"
 }
 
