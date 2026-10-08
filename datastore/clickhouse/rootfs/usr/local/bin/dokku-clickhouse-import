@@ -7,6 +7,13 @@
 # restored beside the live database first and only swapped in once the restore
 # has succeeded, so an archive that fails to restore leaves the data as it was.
 #
+# With DOKKU_CLICKHOUSE_ALL_DATABASES set to true, the backup is one of every
+# database, written by dokku-clickhouse-export the same way, and each database
+# in it replaces the one of the same name. Every database is restored beside
+# the live one before any is swapped in, so an archive that fails to restore
+# leaves every database as it was. A database the archive does not hold is left
+# alone.
+#
 # The password arrives in the environment rather than on the command line, and
 # reaches the client through a config file, so it never shows up in the
 # container's process table.
@@ -17,18 +24,24 @@ BACKUP_CONFIG="${BACKUP_CONFIG:-/etc/clickhouse-server/config.d/dokku-backups.xm
 BACKUP_OWNER="${BACKUP_OWNER:-clickhouse}"
 # the name dokku-clickhouse-export stores the database under inside the archive
 BACKUP_DATABASE="dokku"
+ALL_DATABASES="${DOKKU_CLICKHOUSE_ALL_DATABASES:-false}"
 TIMEOUT_SECONDS="${CONFIG_RELOAD_TIMEOUT_SECONDS:-30}"
 
 CLIENT_CONFIG=""
 BACKUP_FILE=""
-STAGING_DATABASE=""
+BACKUP_NAME=""
+STAGING_DATABASES=()
 
 cleanup() {
+  declare staging
+
   # a staging database left behind means the swap never happened, so the live
   # database is untouched and the half restored copy is only in the way
-  if [[ -n "$STAGING_DATABASE" ]]; then
-    query "DROP DATABASE IF EXISTS \`${STAGING_DATABASE}\` SYNC" >/dev/null 2>&1 || true
-  fi
+  for staging in "${STAGING_DATABASES[@]}"; do
+    if [[ -n "$staging" ]]; then
+      query "DROP DATABASE IF EXISTS $(quote_identifier "$staging") SYNC" >/dev/null 2>&1 || true
+    fi
+  done
 
   rm -f "$CLIENT_CONFIG" "$BACKUP_FILE"
 }
@@ -81,9 +94,10 @@ EOF
 }
 
 # query runs a statement against the service. The session sits in the system
-# database, so that it is never inside the database being replaced.
+# database, so that it is never inside the database being replaced. Anything
+# after the statement is passed to the client, such as a query parameter.
 query() {
-  clickhouse client --config-file "$CLIENT_CONFIG" --host localhost --database system --query "$1"
+  clickhouse client --config-file "$CLIENT_CONFIG" --host localhost --database system --query "$1" "${@:2}"
 }
 
 # reload_pending is true when the server refused a backup path because the
@@ -116,52 +130,116 @@ query_retrying() {
   done
 }
 
+# quote_identifier quotes a name for a statement, whatever it holds
+quote_identifier() {
+  declare name="$1"
+  name="${name//\\/\\\\}"
+  echo "\`${name//\`/\\\`}\`"
+}
+
+# archive_databases prints the databases a backup of every database holds, one
+# per line, read from the metadata file the archive keeps for each. The file is
+# named for the database escaped the way the server escapes any file name, which
+# decodeURLComponent undoes, and which leaves nothing that needs quoting.
+archive_databases() {
+  declare escaped listing
+
+  listing="$(unzip -l "$BACKUP_FILE")" || return 1
+  while IFS= read -r escaped; do
+    if [[ -n "$escaped" ]]; then
+      query "SELECT decodeURLComponent('${escaped}') FORMAT TSVRaw" || return 1
+    fi
+  done < <(awk '$4 ~ /^metadata\/[^\/]+\.sql$/ { name = $4; sub(/^metadata\//, "", name); sub(/\.sql$/, "", name); print name }' <<<"$listing")
+}
+
+# stage restores a database from the archive beside the live one. A staging
+# database from an import that died before its cleanup ran is dropped rather
+# than restored over, since RESTORE refuses a database that already has tables.
+stage() {
+  declare source="$1" database="$2"
+  declare staging="${database}_dokku_import"
+
+  query "DROP DATABASE IF EXISTS $(quote_identifier "$staging") SYNC" >/dev/null
+  STAGING_DATABASES+=("$staging")
+  query_retrying "RESTORE DATABASE $(quote_identifier "$source") AS $(quote_identifier "$staging") FROM File('${BACKUP_NAME}')" >/dev/null
+}
+
+# swap puts a staged database in place of the live one. Renaming a database is
+# a metadata change, so the window in which the service has no database under
+# its name is short, and nothing is dropped until the restored copy is in place.
+swap() {
+  declare database="$1"
+  declare staging="${database}_dokku_import" previous="${database}_dokku_previous"
+  declare exists index
+
+  query "DROP DATABASE IF EXISTS $(quote_identifier "$previous") SYNC" >/dev/null
+  exists="$(query "SELECT count() FROM system.databases WHERE name = {database:String}" --param_database="$database")"
+  if [[ "$exists" != "0" ]]; then
+    query "RENAME DATABASE $(quote_identifier "$database") TO $(quote_identifier "$previous")" >/dev/null
+  fi
+
+  if ! query "RENAME DATABASE $(quote_identifier "$staging") TO $(quote_identifier "$database")" >/dev/null; then
+    # the live database is put back under its name before the staging copy is
+    # dropped, so a failed swap leaves the service as it was
+    if [[ "$exists" != "0" ]]; then
+      query "RENAME DATABASE $(quote_identifier "$previous") TO $(quote_identifier "$database")" >/dev/null
+    fi
+    return 1
+  fi
+
+  for index in "${!STAGING_DATABASES[@]}"; do
+    if [[ "${STAGING_DATABASES[$index]}" == "$staging" ]]; then
+      unset "STAGING_DATABASES[$index]"
+    fi
+  done
+
+  query "DROP DATABASE IF EXISTS $(quote_identifier "$previous") SYNC" >/dev/null
+}
+
 main() {
-  declare database dir exists name previous
+  declare database dir listing
+  declare databases=()
 
   : "${DOKKU_CLICKHOUSE_USER:?DOKKU_CLICKHOUSE_USER is required}"
   : "${DOKKU_CLICKHOUSE_DATABASE:?DOKKU_CLICKHOUSE_DATABASE is required}"
-
-  database="$DOKKU_CLICKHOUSE_DATABASE"
-  previous="${database}_dokku_previous"
 
   trap cleanup EXIT
   write_client_config
   dir="$(backup_dir)"
 
   # unique so that two imports into the same service never share a file
-  name="dokku-import-$(date +%s)-$RANDOM$RANDOM.zip"
-  BACKUP_FILE="$dir/$name"
+  BACKUP_NAME="dokku-import-$(date +%s)-$RANDOM$RANDOM.zip"
+  BACKUP_FILE="$dir/$BACKUP_NAME"
   cat >"$BACKUP_FILE"
   chown "$BACKUP_OWNER:" "$BACKUP_FILE"
 
-  # a staging database from an import that died before its cleanup ran is
-  # dropped rather than restored over, since RESTORE refuses a database that
-  # already has tables
-  STAGING_DATABASE="${database}_dokku_import"
-  query "DROP DATABASE IF EXISTS \`${STAGING_DATABASE}\` SYNC" >/dev/null
-  query_retrying "RESTORE DATABASE \`${BACKUP_DATABASE}\` AS \`${STAGING_DATABASE}\` FROM File('${name}')" >/dev/null
-
-  # the swap. Renaming a database is a metadata change, so the window in which
-  # the service has no database under its name is short, and nothing is dropped
-  # until the restored copy is in place.
-  query "DROP DATABASE IF EXISTS \`${previous}\` SYNC" >/dev/null
-  exists="$(query "SELECT count() FROM system.databases WHERE name = '${database}'")"
-  if [[ "$exists" != "0" ]]; then
-    query "RENAME DATABASE \`${database}\` TO \`${previous}\`" >/dev/null
+  if [[ "$ALL_DATABASES" != "true" ]]; then
+    stage "$BACKUP_DATABASE" "$DOKKU_CLICKHOUSE_DATABASE"
+    swap "$DOKKU_CLICKHOUSE_DATABASE"
+    return
   fi
 
-  if ! query "RENAME DATABASE \`${STAGING_DATABASE}\` TO \`${database}\`" >/dev/null; then
-    # the live database is put back under its name before the staging copy is
-    # dropped, so a failed swap leaves the service as it was
-    if [[ "$exists" != "0" ]]; then
-      query "RENAME DATABASE \`${previous}\` TO \`${database}\`" >/dev/null
+  listing="$(archive_databases)"
+  while IFS= read -r database; do
+    if [[ -n "$database" ]]; then
+      databases+=("$database")
     fi
+  done <<<"$listing"
+
+  if [[ "${#databases[@]}" -eq 0 ]]; then
+    echo "the archive holds no databases; only one written by export --all-databases can be imported with it" >&2
     return 1
   fi
 
-  STAGING_DATABASE=""
-  query "DROP DATABASE IF EXISTS \`${previous}\` SYNC" >/dev/null
+  # every database is staged before any is swapped in, so an archive that
+  # fails part way through restoring leaves them all as they were
+  for database in "${databases[@]}"; do
+    stage "$database" "$database"
+  done
+
+  for database in "${databases[@]}"; do
+    swap "$database"
+  done
 }
 
 main "$@"
