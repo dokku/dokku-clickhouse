@@ -51,6 +51,10 @@ x-dokku:
       length: 16
       env: SERVICE_PASSWORD
 
+      # the image writes the account into users.d each time it starts, from
+      # CLICKHOUSE_PASSWORD, so a new password is a container made again
+      rebuild: true
+
   hooks:
     pre_create:
       # the image's own configuration, copied out before the mount hides it.
