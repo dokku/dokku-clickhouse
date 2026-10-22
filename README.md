@@ -1,6 +1,6 @@
 # dokku clickhouse [![Build Status](https://img.shields.io/github/actions/workflow/status/dokku/dokku-clickhouse/ci.yml?branch=master&style=flat-square "Build Status")](https://github.com/dokku/dokku-clickhouse/actions/workflows/ci.yml?query=branch%3Amaster) [![IRC Network](https://img.shields.io/badge/irc-libera-blue.svg?style=flat-square "IRC Libera")](https://webchat.libera.chat/?channels=dokku)
 
-Official clickhouse plugin for dokku. Currently defaults to installing [clickhouse/clickhouse-server 26.9.17.8](https://hub.docker.com/r/clickhouse/clickhouse-server/).
+Official clickhouse plugin for dokku. Currently defaults to installing [clickhouse/clickhouse-server 26.9.19.9](https://hub.docker.com/r/clickhouse/clickhouse-server/).
 
 ## Sponsors
 
@@ -24,17 +24,17 @@ sudo dokku plugin:install https://github.com/dokku/dokku-clickhouse.git --name c
 
 ```
 clickhouse:app-links [<app>]                       # list all Clickhouse service links for a given app
-clickhouse:backup <service> <bucket-name> [-u|--use-iam] # create a backup of the Clickhouse service to an existing s3 bucket
-clickhouse:backup-auth <service> <aws-access-key-id> <aws-secret-access-key> <aws-default-region> <aws-signature-version> <endpoint-url> # set up authentication for backups on the Clickhouse service
-clickhouse:backup-deauth <service>                 # remove backup authentication for the Clickhouse service
+clickhouse:backup <service> <bucket-name> [--id <id>] [-u|--use-iam] # create a backup of the Clickhouse service to an existing s3 bucket
+clickhouse:backup-auth <service> <aws-access-key-id> <aws-secret-access-key> <aws-default-region> <aws-signature-version> <endpoint-url> [--id <id>] # set up authentication for backups on the Clickhouse service
+clickhouse:backup-deauth <service> [--id <id>]     # remove backup authentication for the Clickhouse service
 clickhouse:backup-logs <service> [-t|--tail [<tail-num>]] # print the most recent output of the scheduled backups of the service
-clickhouse:backup-schedule <service> <schedule> <bucket-name> [-u|--use-iam] # schedule a backup of the Clickhouse service
-clickhouse:backup-schedule-cat <service>           # cat the crontab line of the scheduled backup for the service
-clickhouse:backup-set-encryption <service> <passphrase> # set encryption for all future backups of Clickhouse service
-clickhouse:backup-set-public-key-encryption <service> <public-key-id> # set GPG Public Key encryption for all future backups of Clickhouse service
-clickhouse:backup-unschedule <service>             # unschedule the backup of the Clickhouse service
-clickhouse:backup-unset-encryption <service>       # unset encryption for future backups of the Clickhouse service
-clickhouse:backup-unset-public-key-encryption <service> # unset GPG Public Key encryption for future backups of the Clickhouse service
+clickhouse:backup-schedule <service> <schedule> <bucket-name> [--id <id>] [-u|--use-iam] # schedule a backup of the Clickhouse service
+clickhouse:backup-schedule-cat <service> [--id <id>] # cat the crontab line of a scheduled backup for the service
+clickhouse:backup-set-encryption <service> <passphrase> [--id <id>] # set encryption for all future backups of Clickhouse service
+clickhouse:backup-set-public-key-encryption <service> <public-key-id> [--id <id>] # set GPG Public Key encryption for all future backups of Clickhouse service
+clickhouse:backup-unschedule <service> [--id <id>|--all] # unschedule the backup of the Clickhouse service
+clickhouse:backup-unset-encryption <service> [--id <id>] # unset encryption for future backups of the Clickhouse service
+clickhouse:backup-unset-public-key-encryption <service> [--id <id>] # unset GPG Public Key encryption for future backups of the Clickhouse service
 clickhouse:clone <service> <new-service> [--clone-flags...] # create container <new-name> then copy data from <name> into <new-name>
 clickhouse:connect <service>                       # connect to the service via the clickhouse connection tool
 clickhouse:create <service> [--create-flags...]    # create a Clickhouse service
@@ -56,7 +56,7 @@ clickhouse:promote <service> [<app>]               # promote service <service> a
 clickhouse:reexpose <service>                      # reexpose a Clickhouse service, applying its expose settings
 clickhouse:reset <service> [-f|--force]            # delete all data in the Clickhouse service, keeping the service and its links
 clickhouse:restart <service>                       # graceful shutdown and restart of the Clickhouse service container
-clickhouse:set <service> <key> <value>             # set or clear a property for a service
+clickhouse:set <service> <key> [<value>] [--id <id>] # set or clear a property for a service
 clickhouse:start <service>                         # start a previously stopped Clickhouse service
 clickhouse:stop <service>                          # stop a running Clickhouse service
 clickhouse:unexpose <service>                      # unexpose a previously exposed Clickhouse service
@@ -109,7 +109,7 @@ You can also specify the image and image version to use for the service. It *mus
 
 ```shell
 export CLICKHOUSE_IMAGE="clickhouse/clickhouse-server"
-export CLICKHOUSE_IMAGE_VERSION="26.9.17.8"
+export CLICKHOUSE_IMAGE_VERSION="26.9.19.9"
 dokku clickhouse:create lollipop
 ```
 
@@ -205,6 +205,7 @@ flags:
 - `--backup-object-name`: show the name backups are uploaded under in place of the default
 - `--backup-public-key-id`: show the gpg public key id backups are encrypted with
 - `--backup-schedule`: show the cron schedule backups run on
+- `--backup-schedules`: show every scheduled backup, as id, schedule, bucket and use-iam
 - `--backup-secret-access-key-fingerprint`: show a sha256 fingerprint of the stored backup secret access key
 - `--backup-signature-version`: show the signature version backups authenticate with
 - `--backup-storage-class`: show the s3 storage class backups are uploaded with
@@ -480,12 +481,13 @@ An app is still linked after its `CLICKHOUSE_URL` is changed to point elsewhere,
 
 ```shell
 # usage
-dokku clickhouse:set <service> <key> <value>
+dokku clickhouse:set <service> <key> [<value>] [--id <id>]
 ```
 
 flags:
 
 - `--allow-restart`: restart or reexpose the service when the property only takes effect that way and its value changed
+- `--id <string>`: record the property on this backup schedule instead of on the service
 - `--no-restart`: do not restart the linked apps when a password change updates the url they hold
 
 Set the network to attach after the service container is started:
@@ -568,11 +570,23 @@ dokku clickhouse:set lollipop backup-encryption-passphrase "<passphrase>"
 dokku clickhouse:set lollipop backup-public-key-id "<public-key-id>"
 ```
 
-Ship a scheduled backup to another bucket, or have it authenticate with an instance role. Both rewrite the crontab entry, and need a schedule made with backup-schedule:
+Ship the default scheduled backup to another bucket, or have it authenticate with an instance role, when that is the only schedule. Both rewrite the crontab entry. With more than one schedule, change a schedule with backup-schedule --id:
 
 ```shell
 dokku clickhouse:set lollipop backup-bucket other-bucket
 dokku clickhouse:set lollipop backup-use-iam true
+```
+
+Record a backup setting on one schedule. An empty value clears that schedule's own value and leaves the service's. The bucket and the instance role cannot be set this way:
+
+```shell
+dokku clickhouse:set lollipop backup-storage-class STANDARD_IA --id monthly
+```
+
+Give one schedule its own endpoint. The access key and the secret are set with backup-auth --id, and set rotates one of them once both are stored:
+
+```shell
+dokku clickhouse:set lollipop backup-endpoint-url https://nyc3.digitaloceanspaces.com --id monthly
 ```
 
 Set the keyserver a public key for backup encryption is fetched from:
@@ -1302,15 +1316,19 @@ You may skip the `backup-auth` step if your dokku install is running within EC2 
 
 If both passphrase and public key forms of encryption are set, the public key encryption will take precedence.
 
-Each setting `backup-auth`, `backup-set-encryption` and `backup-set-public-key-encryption` store can also be changed on its own with the `set` command, as can the bucket and IAM setting of a scheduled backup. The keys are listed under Service properties.
+Each setting `backup-auth`, `backup-set-encryption` and `backup-set-public-key-encryption` store can also be changed on its own with the `set` command, as can the bucket and IAM setting of the schedule made without `--id`, when that is the only schedule. The keys are listed under Service properties.
 
-Backups are uploaded with the bucket's default storage class unless the service sets the `backup-storage-class` property with the `set` command.
+Backups are uploaded with the bucket's default storage class unless the service sets the `backup-storage-class` property with the `set` command. A schedule may set its own value with `set <key> <value> --id <id>`.
 
-Backups are uploaded to `<prefix>-<service>-<timestamp>.tgz`. The service may name the key with the `backup-object-name` property and drop the timestamp by setting the `backup-timestamp` property to `false`, so that every backup is uploaded to the same key and bucket versioning and lifecycle rules can keep and rotate them. The bucket name may end in a path to upload under, such as `my-s3-bucket/backups`.
+Backups are uploaded to `<prefix>-<service>-<timestamp>.tgz`. The service may name the key with the `backup-object-name` property and drop the timestamp by setting the `backup-timestamp` property to `false`, so that every backup is uploaded to the same key and bucket versioning and lifecycle rules can keep and rotate them. The bucket name may end in a path to upload under, such as `my-s3-bucket/backups`. A schedule may set either for itself.
 
 The underlying core backup script is present [here](https://github.com/dokku/docker-s3backup/blob/main/backup.sh).
 
-Scheduled backups are added to the dokku crontab, and are listed by `dokku cron:list --global`. Each service's scheduled backups append their output to a log of its own, `/var/log/dokku/<prefix>.<service>.backup.log`, which the `backup-logs` command shows. The output of a service's scheduled backups can be mailed to specific recipients by setting the `backup-mailto` property with the `set` command, on dokku versions that support a per-entry `MAILTO`.
+A service has one scheduled backup, made with `backup-schedule` and replaced by calling it again. Further schedules are added with `--id <name>`, each with its own cron expression and bucket, so a service can ship a frequent backup and a monthly backup to different buckets. `backup-schedule-cat` lists every schedule. `backup-unschedule` removes the only schedule; with several it removes the one named by `--id`, or every schedule with `--all`.
+
+`backup-auth` and `backup-deauth` take the same `--id`. A schedule is created first, then given its own access key and secret. A schedule with both uses that pair. A schedule with neither uses the service's credentials, unless the backup is run with `--use-iam`. A region, signature version or endpoint set on the schedule is used for that schedule, and one left unset is the service's.
+
+Scheduled backups are added to the dokku crontab, and are listed by `dokku cron:list --global`. Each service's scheduled backups append their output to a log of its own, `/var/log/dokku/<prefix>.<service>.backup.log`, which the `backup-logs` command shows. The output of a service's scheduled backups can be mailed to specific recipients by setting the `backup-mailto` property with the `set` command, on dokku versions that support a per-entry `MAILTO`. The service value applies to every schedule that has not set its own.
 
 Backups can be performed using the backup commands:
 
@@ -1318,8 +1336,12 @@ Backups can be performed using the backup commands:
 
 ```shell
 # usage
-dokku clickhouse:backup-auth <service> <aws-access-key-id> <aws-secret-access-key> <aws-default-region> <aws-signature-version> <endpoint-url>
+dokku clickhouse:backup-auth <service> <aws-access-key-id> <aws-secret-access-key> <aws-default-region> <aws-signature-version> <endpoint-url> [--id <id>]
 ```
+
+flags:
+
+- `--id <string>`: record the credentials on this backup schedule
 
 Setup s3 backup authentication:
 
@@ -1353,12 +1375,22 @@ More specific example for digitalocean spaces auth, where the endpoint does not 
 dokku clickhouse:backup-auth lollipop SPACES_ACCESS_KEY SPACES_SECRET_KEY nyc3 s3v4 https://nyc3.digitaloceanspaces.com
 ```
 
+Record credentials on one schedule. The schedule is created first with backup-schedule --id. A region, signature version or endpoint url that is not passed is cleared on that schedule, so it inherits the service's value:
+
+```shell
+dokku clickhouse:backup-auth lollipop AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY us-east-1 --id monthly
+```
+
 ### remove backup authentication for the Clickhouse service
 
 ```shell
 # usage
-dokku clickhouse:backup-deauth <service>
+dokku clickhouse:backup-deauth <service> [--id <id>]
 ```
+
+flags:
+
+- `--id <string>`: clear the credentials recorded on this backup schedule
 
 Remove s3 authentication:
 
@@ -1366,15 +1398,22 @@ Remove s3 authentication:
 dokku clickhouse:backup-deauth lollipop
 ```
 
+Remove the credentials recorded on one schedule. The service's credentials stay, and that schedule uses them again:
+
+```shell
+dokku clickhouse:backup-deauth lollipop --id monthly
+```
+
 ### create a backup of the Clickhouse service to an existing s3 bucket
 
 ```shell
 # usage
-dokku clickhouse:backup <service> <bucket-name> [-u|--use-iam]
+dokku clickhouse:backup <service> <bucket-name> [--id <id>] [-u|--use-iam]
 ```
 
 flags:
 
+- `--id <string>`: run with the settings of this schedule
 - `-u|--use-iam`: use the IAM profile associated with the current server
 
 Backup the `lollipop` service to the `my-s3-bucket` bucket on `AWS`:
@@ -1383,6 +1422,12 @@ Backup the `lollipop` service to the `my-s3-bucket` bucket on `AWS`:
 
 ```shell
 dokku clickhouse:backup lollipop my-s3-bucket --use-iam
+```
+
+Backup with the settings recorded on one schedule. The bucket and --use-iam still come from this command:
+
+```shell
+dokku clickhouse:backup lollipop my-s3-bucket --id monthly
 ```
 
 Backup the `lollipop` service under a path in the bucket:
@@ -1407,8 +1452,12 @@ dokku clickhouse:import lollipop < backup-folder/export
 
 ```shell
 # usage
-dokku clickhouse:backup-set-encryption <service> <passphrase>
+dokku clickhouse:backup-set-encryption <service> <passphrase> [--id <id>]
 ```
+
+flags:
+
+- `--id <string>`: record the passphrase on this backup schedule
 
 Set the GPG-compatible passphrase for encrypting backups for backups:
 
@@ -1416,14 +1465,22 @@ Set the GPG-compatible passphrase for encrypting backups for backups:
 dokku clickhouse:backup-set-encryption lollipop
 ```
 
-Public key encryption will take precendence over the passphrase encryption if both types are set.
+Public key encryption will take precendence over the passphrase encryption if both types are set. Record the passphrase on one schedule. It replaces the service's passphrase and public key for that schedule:
+
+```shell
+dokku clickhouse:backup-set-encryption lollipop --id monthly
+```
 
 ### set GPG Public Key encryption for all future backups of Clickhouse service
 
 ```shell
 # usage
-dokku clickhouse:backup-set-public-key-encryption <service> <public-key-id>
+dokku clickhouse:backup-set-public-key-encryption <service> <public-key-id> [--id <id>]
 ```
+
+flags:
+
+- `--id <string>`: record the public key on this backup schedule
 
 Set the `GPG` Public Key for encrypting backups:
 
@@ -1437,12 +1494,22 @@ The <public-key-id> is fetched from `keyserver.ubuntu.com`, unless the service n
 dokku clickhouse:set lollipop backup-keyserver hkp://keys.example.com
 ```
 
+Record the public key on one schedule:
+
+```shell
+dokku clickhouse:backup-set-public-key-encryption lollipop --id monthly
+```
+
 ### unset encryption for future backups of the Clickhouse service
 
 ```shell
 # usage
-dokku clickhouse:backup-unset-encryption <service>
+dokku clickhouse:backup-unset-encryption <service> [--id <id>]
 ```
+
+flags:
+
+- `--id <string>`: clear the passphrase recorded on this backup schedule
 
 Unset the `GPG` encryption passphrase for backups:
 
@@ -1450,12 +1517,22 @@ Unset the `GPG` encryption passphrase for backups:
 dokku clickhouse:backup-unset-encryption lollipop
 ```
 
+Clear the passphrase recorded on one schedule, so that schedule inherits the service's encryption again:
+
+```shell
+dokku clickhouse:backup-unset-encryption lollipop --id monthly
+```
+
 ### unset GPG Public Key encryption for future backups of the Clickhouse service
 
 ```shell
 # usage
-dokku clickhouse:backup-unset-public-key-encryption <service>
+dokku clickhouse:backup-unset-public-key-encryption <service> [--id <id>]
 ```
+
+flags:
+
+- `--id <string>`: clear the public key recorded on this backup schedule
 
 Unset the `GPG` Public Key encryption for backups:
 
@@ -1463,15 +1540,22 @@ Unset the `GPG` Public Key encryption for backups:
 dokku clickhouse:backup-unset-public-key-encryption lollipop
 ```
 
+Clear the public key recorded on one schedule:
+
+```shell
+dokku clickhouse:backup-unset-public-key-encryption lollipop --id monthly
+```
+
 ### schedule a backup of the Clickhouse service
 
 ```shell
 # usage
-dokku clickhouse:backup-schedule <service> <schedule> <bucket-name> [-u|--use-iam]
+dokku clickhouse:backup-schedule <service> <schedule> <bucket-name> [--id <id>] [-u|--use-iam]
 ```
 
 flags:
 
+- `--id <string>`: the schedule to record, in place of the default schedule
 - `-u|--use-iam`: use the IAM profile associated with the current server
 
 Schedule a backup:
@@ -1480,6 +1564,8 @@ Schedule a backup:
 > the backup is added to the dokku crontab through the cron-entries plugin trigger, so it is listed by "dokku cron:list --global" and its output is appended to /var/log/dokku/clickhouse.<service>.backup.log, which "dokku clickhouse:backup-logs <service>" prints
 > each scheduled backup fires the same service-action post-backup trigger as "dokku clickhouse:backup", so a plugin can report whether it succeeded
 > NOTE: dokku only writes a crontab when the global scheduler or at least one app uses the docker-local scheduler, so a scheduled backup does not run on a host that only uses k3s or null
+> calling it again without --id replaces that schedule's cron expression, bucket and instance role, and leaves every other schedule in place
+> --id names another schedule, or replaces the one that id already names. --id default is the schedule made without --id
 
 ```shell
 dokku clickhouse:backup-schedule lollipop "0 3 * * *" my-s3-bucket
@@ -1491,30 +1577,63 @@ Schedule a backup and authenticate via iam:
 dokku clickhouse:backup-schedule lollipop "0 3 * * *" my-s3-bucket --use-iam
 ```
 
-### cat the crontab line of the scheduled backup for the service
+Schedule a second backup under its own id:
+
+```shell
+dokku clickhouse:backup-schedule lollipop "0 3 1 * *" my-s3-bucket --id monthly
+```
+
+### cat the crontab line of a scheduled backup for the service
 
 ```shell
 # usage
-dokku clickhouse:backup-schedule-cat <service>
+dokku clickhouse:backup-schedule-cat <service> [--id <id>]
 ```
 
-Cat the crontab line of the scheduled backup for the service:
+flags:
+
+- `--id <string>`: the schedule to print
+
+Cat the crontab line of the scheduled backup for the service. With more than one schedule, each line is preceded by its id:
 
 ```shell
 dokku clickhouse:backup-schedule-cat lollipop
+```
+
+Cat one schedule:
+
+```shell
+dokku clickhouse:backup-schedule-cat lollipop --id monthly
 ```
 
 ### unschedule the backup of the Clickhouse service
 
 ```shell
 # usage
-dokku clickhouse:backup-unschedule <service>
+dokku clickhouse:backup-unschedule <service> [--id <id>|--all]
 ```
 
-Remove the scheduled backup from the dokku crontab:
+flags:
+
+- `--all`: remove every scheduled backup
+- `--id <string>`: the schedule to remove
+
+Remove the scheduled backup from the dokku crontab. With one schedule, that schedule is removed. With several, name one with --id, or pass --all:
 
 ```shell
 dokku clickhouse:backup-unschedule lollipop
+```
+
+Remove one schedule:
+
+```shell
+dokku clickhouse:backup-unschedule lollipop --id monthly
+```
+
+Remove every schedule:
+
+```shell
+dokku clickhouse:backup-unschedule lollipop --all
 ```
 
 ### print the most recent output of the scheduled backups of the service
