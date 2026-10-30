@@ -8,6 +8,8 @@ services:
       CLICKHOUSE_DB: "{{ .Database }}"
       CLICKHOUSE_PASSWORD: "{{ .Secret.password }}"
       CLICKHOUSE_USER: "{{ .ServiceName }}"
+      # the account may make the users the service holds beside it
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
 
     volumes:
       # this mounts over the directory the image keeps its own configuration
@@ -38,12 +40,127 @@ x-dokku:
   # takes no database in the path, the native one does.
   dsn: >-
     {{ if eq .Scheme "http" -}}
-    http://{{ .ServiceName }}:{{ .Secret.password }}@{{ .Host }}:{{ .Port.http }}
+    http://{{ .Username }}:{{ .Password }}@{{ .Host }}:{{ .Port.http }}
     {{- else -}}
-    {{ .Scheme }}://{{ .ServiceName }}:{{ .Secret.password }}@{{ .Host }}:{{ .Port.native }}/{{ .Database }}
+    {{ .Scheme }}://{{ .Username }}:{{ .Password }}@{{ .Host }}:{{ .Port.native }}/{{ .Database }}
     {{- end }}
 
   wait: native
+
+  # the databases and users a service holds beside its own, made as the
+  # service's account in the service container, as reset is. The account is
+  # declared in users.d, which leaves it holding every grant already, so only
+  # the users made in the service are granted each database, and the account
+  # may only make them once the image is told to let it manage access, which
+  # a container made before that was declared was not. Names are checked
+  # before they get here, so they are quoted rather than escaped, and a
+  # password is written to the client's stdin rather than passed as an
+  # argument.
+  databases:
+    create:
+      exec:
+        - sh
+        - -c
+        - |
+          set -e
+          database="$1"
+          query() {
+            clickhouse client --user "$DOKKU_CLICKHOUSE_USER" --database system --query "$1"
+          }
+          query "CREATE DATABASE \`$database\`"
+          for user in $2; do
+            [ "$user" = "$DOKKU_CLICKHOUSE_USER" ] && continue
+            query "GRANT ALL ON \`$database\`.* TO \`$user\`"
+          done
+        - dokku-clickhouse-create-database
+        - "{{ .Args.database }}"
+        - "{{ .Args.users }}"
+      env:
+        CLICKHOUSE_PASSWORD: "{{ .Secret.password }}"
+        DOKKU_CLICKHOUSE_USER: "{{ .ServiceName }}"
+    # a grant outlives the database it names, and would hand a database made
+    # later under the same name to whoever had this one, so it goes with it
+    destroy:
+      exec:
+        - sh
+        - -c
+        - |
+          set -e
+          database="$1"
+          query() {
+            clickhouse client --user "$DOKKU_CLICKHOUSE_USER" --database system --query "$1"
+          }
+          for user in $2; do
+            [ "$user" = "$DOKKU_CLICKHOUSE_USER" ] && continue
+            query "REVOKE ALL ON \`$database\`.* FROM \`$user\`"
+          done
+          query "DROP DATABASE \`$database\` SYNC"
+        - dokku-clickhouse-destroy-database
+        - "{{ .Args.database }}"
+        - "{{ .Args.users }}"
+      env:
+        CLICKHOUSE_PASSWORD: "{{ .Secret.password }}"
+        DOKKU_CLICKHOUSE_USER: "{{ .ServiceName }}"
+  users:
+    default: "{{ .ServiceName }}"
+    secret: password
+    reserved: [default]
+    create:
+      exec:
+        - sh
+        - -c
+        - |
+          set -e
+          user="$1"
+          password="$(printf '%s' "$NEW_PASSWORD" | sed "s/'/''/g")"
+          query() {
+            clickhouse client --user "$DOKKU_CLICKHOUSE_USER" --database system --query "$1"
+          }
+          manage() {
+            if ! output="$(clickhouse client --user "$DOKKU_CLICKHOUSE_USER" --database system 2>&1)"; then
+              printf '%s\n' "$output" >&2
+              echo "the service's account may not manage users, which it is only allowed to once its container has been made again: run dokku clickhouse:stop and then dokku clickhouse:start" >&2
+              exit 1
+            fi
+          }
+          printf "CREATE USER \`%s\` IDENTIFIED WITH sha256_password BY '%s'\n" "$user" "$password" | manage
+          for database in $2; do
+            query "GRANT ALL ON \`$database\`.* TO \`$user\`"
+          done
+        - dokku-clickhouse-create-user
+        - "{{ .Args.user }}"
+        - "{{ .Args.databases }}"
+      env:
+        CLICKHOUSE_PASSWORD: "{{ .Secret.password }}"
+        DOKKU_CLICKHOUSE_USER: "{{ .ServiceName }}"
+        NEW_PASSWORD: "{{ .NewSecret }}"
+    destroy:
+      exec:
+        - sh
+        - -c
+        - |
+          set -e
+          clickhouse client --user "$DOKKU_CLICKHOUSE_USER" --database system --query "DROP USER \`$1\`"
+        - dokku-clickhouse-destroy-user
+        - "{{ .Args.user }}"
+      env:
+        CLICKHOUSE_PASSWORD: "{{ .Secret.password }}"
+        DOKKU_CLICKHOUSE_USER: "{{ .ServiceName }}"
+    change:
+      exec:
+        - sh
+        - -c
+        - |
+          set -e
+          password="$(printf '%s' "$NEW_PASSWORD" | sed "s/'/''/g")"
+          printf "ALTER USER \`%s\` IDENTIFIED WITH sha256_password BY '%s'\n" "$1" "$password" |
+            clickhouse client --user "$DOKKU_CLICKHOUSE_USER" --database system
+        - dokku-clickhouse-change-user-password
+        - "{{ .Args.user }}"
+      env:
+        CLICKHOUSE_PASSWORD: "{{ .Secret.password }}"
+        DOKKU_CLICKHOUSE_USER: "{{ .ServiceName }}"
+        NEW_PASSWORD: "{{ .NewSecret }}"
 
   secrets:
     password:
@@ -86,7 +203,14 @@ x-dokku:
     # before it runs anything, so no result is shown until stdin is closed.
     # None of its options changes that.
     connect:
-      exec: ["clickhouse", "client", "--user={{ .ServiceName }}", "--password={{ .Secret.password }}"]
+      exec:
+        - clickhouse
+        - client
+        - "--user={{ .Username }}"
+        - "--password={{ .Password }}"
+        # the server's own default database unless another is asked for, as
+        # it has always been
+        - "{{ if ne .Database .DefaultDatabase }}--database={{ .Database }}{{ end }}"
       env:
         LANG: C.UTF-8
         LC_ALL: C.UTF-8
